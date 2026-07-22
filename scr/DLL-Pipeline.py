@@ -1,0 +1,149 @@
+import os
+import io
+import pandas as pd
+import numpy as np
+from datetime import datetime
+from sqlalchemy import create_engine
+import pymssql
+import argparse
+from argparse import Namespace
+from scr.loader import get_banxico_info, get_cfdi_info, get_metadata_info, get_edicom_info
+from scr.transformer import (
+    transform_banxico_info,
+    transform_cfdi_info,
+    transform_edicom_info,
+    transform_metadata_info,
+)
+from scr.integration import integrate_data, normalize_concepts
+from scr.export import export_to_excel
+
+
+def parse_args() -> Namespace:
+    parser = argparse.ArgumentParser(
+        description="Procesar datos de CFDI, Edicom y Metadata."
+    )
+    parser.add_argument(
+        "--date",
+        type=str,
+        required=True,
+        help="Fecha en formato YYYY-MM para procesar los datos.",
+    )
+    return parser.parse_args()
+
+
+def load_data(date_: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    Load raw data from metadata, Edicom, and CFDI based on the specified date.
+    """
+    raw_metadata_info_df = get_metadata_info(date_)
+    raw_edicom_info_df = get_edicom_info(date_)
+    raw_cfdi_info_df = get_cfdi_info(date_)
+    raw_banxico_info_df = get_banxico_info()
+    return raw_metadata_info_df, raw_edicom_info_df, raw_cfdi_info_df, raw_banxico_info_df
+
+
+def transform_data(
+    raw_metadata_info_df: pd.DataFrame,
+    raw_edicom_info_df: pd.DataFrame,
+    raw_cfdi_info_df: pd.DataFrame,
+    raw_banxico_info_df: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    Transform the raw data from metadata, Edicom, and CFDI into a final DataFrame.
+
+    Args:
+        raw_metadata_info_df (pd.DataFrame): Raw metadata information.
+        raw_edicom_info_df (pd.DataFrame): Raw Edicom information.
+        raw_cfdi_info_df (pd.DataFrame): Raw CFDI information.
+        raw_banxico_info_df (pd.DataFrame): Raw Banxico information.
+
+    Returns:
+        pd.DataFrame: Transformed final DataFrame.
+    """
+    transformed_edicom_info_df = transform_edicom_info(raw_edicom_info_df)
+    transformed_metadata_info_df = transform_metadata_info(raw_metadata_info_df)
+    transformed_cfdi_info_df = transform_cfdi_info(raw_cfdi_info_df)
+    transformed_banxico_info_df = transform_banxico_info(raw_banxico_info_df)
+    return (
+        transformed_edicom_info_df,
+        transformed_metadata_info_df,
+        transformed_cfdi_info_df,
+        transformed_banxico_info_df,
+    )
+
+
+def consolidate_info(
+    transformed_edicom_info_df: pd.DataFrame,
+    transformed_metadata_info_df: pd.DataFrame,
+    transformed_cfdi_info_df: pd.DataFrame,
+    transformed_banxico_info_df: pd.DataFrame,
+    # date_: str,
+) -> pd.DataFrame:
+    """
+    Consolidate the transformed data from metadata, Edicom, and CFDI into a final DataFrame.
+
+    Args:
+        transformed_edicom_info_df (pd.DataFrame): Transformed Edicom information.
+        transformed_metadata_info_df (pd.DataFrame): Transformed metadata information.
+        transformed_cfdi_info_df (pd.DataFrame): Transformed CFDI information.
+        transformed_banxico_info_df (pd.DataFrame): Transformed Banxico information.
+    """
+    consolidated_df = pd.merge(
+        transformed_metadata_info_df,
+        transformed_banxico_info_df,
+        left_on="Fecha",
+        right_on="FECHA_TC",
+        how="left",
+    )
+    consolidated_df = pd.merge(
+        transformed_edicom_info_df,
+        consolidated_df,
+        left_on="UUID",
+        right_on="Uuid",
+        how="left",
+        suffixes=("_EDICOM", "_METADATA")
+    )
+
+    consolidated_df = pd.merge(
+        consolidated_df,
+        transformed_cfdi_info_df,
+        left_on="UUID",
+        right_on="UUID",
+        how="left",
+    )
+    consolidated_df = integrate_data(consolidated_df)
+    return consolidated_df
+
+
+def validate_args(date_str: str) -> str:
+    try:
+        datetime.strptime(date_str, "%Y_%m")
+    except ValueError:
+        raise ValueError("La fecha debe estar en formato YYYY-MM.")
+    return date_str
+
+
+def main():
+    args = parse_args()
+    date_ = validate_args(args.date)
+    raw_metadata_info_df, raw_edicom_info_df, raw_cfdi_info_df, raw_banxico_info_df = load_data(date_)
+    (
+        transformed_edicom_info_df,
+        transformed_metadata_info_df,
+        transformed_cfdi_info_df,
+        transformed_banxico_info_df,
+    ) = transform_data(raw_metadata_info_df, raw_edicom_info_df, raw_cfdi_info_df, raw_banxico_info_df)
+    consolidated_df = consolidate_info(
+        transformed_edicom_info_df,
+        transformed_metadata_info_df,
+        transformed_cfdi_info_df,
+        transformed_banxico_info_df,
+    )
+
+    validation = export_to_excel(consolidated_df, date_)
+    if validation:
+        print("Se creo correctamente el archivo")
+
+
+if __name__ == "__main__":
+    main()
