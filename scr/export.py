@@ -1,7 +1,10 @@
 
+import logging
 import pandas as pd
 from pathlib import Path
 from config.config import OUTPUT_FOLDER
+
+logger = logging.getLogger(__name__)
 
 def export_to_excel(consolidated_df: pd.DataFrame, date_: str) -> bool:
     """
@@ -28,5 +31,12 @@ def export_to_excel(consolidated_df: pd.DataFrame, date_: str) -> bool:
     output_dir.mkdir(parents=True, exist_ok=True)
     file_name = f"Sofom - Amarre de facturación Invoicing con MTD SAT {date_}.xlsx"
     output_path = output_dir / file_name
-    consolidated_df[columns_to_export].to_excel(output_path, index=False)
+
+    missing = [c for c in columns_to_export if c not in consolidated_df.columns]
+    if missing:
+        logger.warning("Some columns to export are missing", extra={"missing_columns": missing})
+
+    cols_present = [c for c in columns_to_export if c in consolidated_df.columns]
+    consolidated_df[cols_present].to_excel(output_path, index=False)
+    logger.info("Exported consolidated dataframe to Excel", extra={"output_path": str(output_path), "rows": int(consolidated_df.shape[0])})
     return True

@@ -1,3 +1,4 @@
+import logging
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 
@@ -6,8 +7,10 @@ from config.config import (
     DB_SERVER,
     DB_DATABASE,
     DB_USER,
-    DB_PASSWORD
+    DB_PASSWORD,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def get_engine() -> Engine:
@@ -21,9 +24,14 @@ def get_engine() -> Engine:
         ValueError: If any of the required database configuration parameters are missing.
     """
 
+    logger.info("Creating DB engine", extra={"server": DB_SERVER, "database": DB_DATABASE, "user": DB_USER, "port": DB_PORT})
     if not all([DB_SERVER, DB_DATABASE, DB_USER, DB_PASSWORD, DB_PORT]):
-        raise ValueError("Hace falta uno o más parámetros de configuración de la base de datos. Por favor, verifica el archivo .env.")
+        logger.error("Missing DB configuration parameters")
+        raise ValueError(
+            "Hace falta uno o más parámetros de configuración de la base de datos. Por favor, verifica el archivo .env."
+        )
 
+    # Avoid logging sensitive values like DB_PASSWORD
     connection_string = (
         f"mssql+pymssql://"
         f"{DB_USER}:{DB_PASSWORD}"
@@ -31,12 +39,13 @@ def get_engine() -> Engine:
         f"{DB_DATABASE}"
     )
 
-    engine = create_engine(
-        connection_string,
-        pool_pre_ping=True
-    )
-
-    return engine
+    try:
+        engine = create_engine(connection_string, pool_pre_ping=True)
+        logger.debug("DB engine created successfully")
+        return engine
+    except Exception as e:
+        logger.exception("Failed to create DB engine", exc_info=e)
+        raise
 
 def close_engine(engine: Engine) -> None:
     """
@@ -46,4 +55,8 @@ def close_engine(engine: Engine) -> None:
         engine (Engine): The SQLAlchemy engine to be closed.
     """
     if engine:
-        engine.dispose()
+        try:
+            engine.dispose()
+            logger.debug("DB engine disposed")
+        except Exception as e:
+            logger.exception("Error disposing DB engine", exc_info=e)

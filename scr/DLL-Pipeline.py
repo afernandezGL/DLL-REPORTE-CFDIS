@@ -2,6 +2,7 @@ import os
 import io
 import pandas as pd
 import numpy as np
+import logging
 from datetime import datetime
 from sqlalchemy import create_engine
 import pymssql
@@ -16,6 +17,8 @@ from scr.transformer import (
 )
 from scr.integration import integrate_data, normalize_concepts
 from scr.export import export_to_excel
+
+logger = logging.getLogger(__name__)
 
 
 def parse_args() -> Namespace:
@@ -35,6 +38,7 @@ def load_data(date_: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.
     """
     Load raw data from metadata, Edicom, and CFDI based on the specified date.
     """
+    logger.info("Loading raw data for date", extra={"date": date_})
     raw_metadata_info_df = get_metadata_info(date_)
     raw_edicom_info_df = get_edicom_info(date_)
     raw_cfdi_info_df = get_cfdi_info(date_)
@@ -60,10 +64,17 @@ def transform_data(
     Returns:
         pd.DataFrame: Transformed final DataFrame.
     """
+    logger.info("Transforming raw dataframes")
     transformed_edicom_info_df = transform_edicom_info(raw_edicom_info_df)
     transformed_metadata_info_df = transform_metadata_info(raw_metadata_info_df)
     transformed_cfdi_info_df = transform_cfdi_info(raw_cfdi_info_df)
     transformed_banxico_info_df = transform_banxico_info(raw_banxico_info_df)
+    logger.info("Transformation completed", extra={
+        "edicom_rows": int(transformed_edicom_info_df.shape[0]),
+        "metadata_rows": int(transformed_metadata_info_df.shape[0]),
+        "cfdi_rows": int(transformed_cfdi_info_df.shape[0]),
+        "banxico_rows": int(transformed_banxico_info_df.shape[0]),
+    })
     return (
         transformed_edicom_info_df,
         transformed_metadata_info_df,
@@ -88,6 +99,7 @@ def consolidate_info(
         transformed_cfdi_info_df (pd.DataFrame): Transformed CFDI information.
         transformed_banxico_info_df (pd.DataFrame): Transformed Banxico information.
     """
+    logger.info("Consolidating dataframes")
     consolidated_df = pd.merge(
         transformed_metadata_info_df,
         transformed_banxico_info_df,
@@ -112,6 +124,7 @@ def consolidate_info(
         how="left",
     )
     consolidated_df = integrate_data(consolidated_df)
+    logger.info("Consolidation completed", extra={"rows": int(consolidated_df.shape[0])})
     return consolidated_df
 
 
@@ -119,6 +132,7 @@ def validate_args(date_str: str) -> str:
     try:
         datetime.strptime(date_str, "%Y_%m")
     except ValueError:
+        logger.error("Invalid date format", extra={"date_str": date_str})
         raise ValueError("La fecha debe estar en formato YYYY-MM.")
     return date_str
 
@@ -126,6 +140,7 @@ def validate_args(date_str: str) -> str:
 def main():
     args = parse_args()
     date_ = validate_args(args.date)
+    logger.info("Pipeline started", extra={"date": date_})
     raw_metadata_info_df, raw_edicom_info_df, raw_cfdi_info_df, raw_banxico_info_df = load_data(date_)
     (
         transformed_edicom_info_df,
@@ -140,8 +155,8 @@ def main():
         transformed_banxico_info_df,
     )
 
-    validation = export_to_excel(consolidated_df, date_)
-    if validation:
+    if export_to_excel(consolidated_df, date_):
+        logger.info("Export completed", extra={"date": date_})
         print("Se creo correctamente el archivo")
 
 

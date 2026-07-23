@@ -4,3 +4,4 @@ SQLAlchemy
 pymssql
 openpyxl
 python-dotenv
+pytest
