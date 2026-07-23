@@ -73,10 +73,27 @@ def transform_edicom_info(raw_edicom_df: pd.DataFrame) -> pd.DataFrame:
     selected_raw_edicom_cols = get_edicom_normalized_column_names(raw_edicom_df)
     old_edicom_df = raw_edicom_df[selected_raw_edicom_cols]
     new_edicom_df = old_edicom_df.copy()
+    new_edicom_df["FECHADOCUMENTO"] = pd.to_datetime(
+        new_edicom_df["FECHADOCUMENTO"],
+        dayfirst=True,
+        errors="coerce"
+    )
+
+    new_edicom_df["FECHADOCUMENTO"] = new_edicom_df["FECHADOCUMENTO"].dt.strftime("%d/%m/%Y")
+
+    new_edicom_df["FECHAREAL"] = pd.to_datetime(
+        new_edicom_df["FECHAREAL"],
+        dayfirst=True,
+        errors="coerce"
+    )
+
+    new_edicom_df["FECHAREAL"] = new_edicom_df["FECHAREAL"].dt.strftime("%d/%m/%Y %H:%M:%S")
 
     new_edicom_df = new_edicom_df[new_edicom_df["TIPODECOMPROBANTE"] == "I"]
     new_edicom_df["CONTRATO (CLAVE)"] = new_edicom_df["CONTRATO"].str[4:11]
     new_edicom_df["% DE IVA"] = new_edicom_df["IVA"] / new_edicom_df["SUBTOTAL"]
+    new_edicom_df["% DE IVA"] = new_edicom_df["% DE IVA"].fillna(0)
+    new_edicom_df["% DE IVA"] = new_edicom_df["% DE IVA"].map('{:.0%}'.format)
     new_edicom_df["Contrato MID"] = new_edicom_df["CONTRATO"].str[0:3]
     return new_edicom_df
 
@@ -85,6 +102,12 @@ def transform_cfdi_info(raw_cfdi_df: pd.DataFrame) -> pd.DataFrame:
     transformer_cfdi_df = raw_cfdi_df.copy()
     transformer_cfdi_df["USO CFDI"] = transformer_cfdi_df["CFDI_USE"].map(CFDI_USE_MAP)
     transformer_cfdi_df = transformer_cfdi_df.rename(columns={"TASA":"% DE IVA POR CONCEPTO"})
+    transformer_cfdi_df["% DE IVA POR CONCEPTO"] = transformer_cfdi_df["% DE IVA POR CONCEPTO"].fillna("0%")
+    transformer_cfdi_df["% DE IVA POR CONCEPTO"] = np.where(
+        transformer_cfdi_df["% DE IVA POR CONCEPTO"] == "16%",
+        transformer_cfdi_df["% DE IVA POR CONCEPTO"],
+        "Exento"
+    )
     return transformer_cfdi_df
 
 

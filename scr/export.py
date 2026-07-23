@@ -28,7 +28,5 @@ def export_to_excel(consolidated_df: pd.DataFrame, date_: str) -> bool:
     output_dir.mkdir(parents=True, exist_ok=True)
     file_name = f"Sofom - Amarre de facturación Invoicing con MTD SAT {date_}.xlsx"
     output_path = output_dir / file_name
-    import pdb; pdb.set_trace()
-
     consolidated_df[columns_to_export].to_excel(output_path, index=False)
     return True
