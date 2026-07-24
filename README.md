@@ -162,7 +162,6 @@ con un nombre que sigue el patrón utilizado en el código de exportación.
 
 La implementación actual es funcional para un flujo único de pipeline, pero las siguientes mejoras harían el proyecto más robusto y mantenible:
 
-- agregar logging y seguimiento de errores para cada etapa del pipeline,
 - parametrizar el nombrado de salidas y la selección de columnas,
 - introducir pruebas unitarias e de integración,
 - reemplazar los strings inline de SQL por plantillas versionadas o stored procedures,

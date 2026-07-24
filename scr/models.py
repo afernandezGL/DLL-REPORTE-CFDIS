@@ -126,3 +126,26 @@ prefixes = [
         'DE',
         'Factoraje', 'SUBARR', 'UDI'
     ]
+
+prefixes = [
+    "REN ANT",
+    "REN ANT 0%",
+    "REN",
+    "REN 0%",
+    "VEN",
+    "VEN 0%",
+    "SEG VIDA",
+    "SEG",
+    "SUB",
+    "GAS",
+    "OPC",
+    "OSPREY",
+    "PRI",
+    "REEMBOLSO",
+    "ARR",
+    "COM",
+    "DE",
+    "Factoraje",
+    "SUBARR",
+    "UDI",
+]

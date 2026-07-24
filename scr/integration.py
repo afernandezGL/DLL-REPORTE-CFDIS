@@ -21,7 +21,9 @@ def integrate_data(consolidated_df: pd.DataFrame) -> pd.DataFrame:
     Args:
         consolidated_dataframe (pd.DataFrame): The consolidated DataFrame to be integrated.
     """
-    logger.info("Starting integrate_data", extra={"rows": int(consolidated_df.shape[0])})
+    logger.info(
+        "Starting integrate_data", extra={"rows": int(consolidated_df.shape[0])}
+    )
     try:
         consolidated_df["ESTATUS REPORTE INTERNO VS METADATA"] = np.where(
             consolidated_df["ESTATUS_EDICOM"].str.upper()
@@ -30,10 +32,14 @@ def integrate_data(consolidated_df: pd.DataFrame) -> pd.DataFrame:
             0,
         )
     except Exception as e:
-        logger.exception("Error computing ESTATUS REPORTE INTERNO VS METADATA", exc_info=e)
+        logger.exception(
+            "Error computing ESTATUS REPORTE INTERNO VS METADATA", exc_info=e
+        )
         raise
     if "ESTATUS_METADATA" in consolidated_df.columns:
-        consolidated_df = consolidated_df.rename(columns={"ESTATUS_METADATA": "ESTATUS"})
+        consolidated_df = consolidated_df.rename(
+            columns={"ESTATUS_METADATA": "ESTATUS"}
+        )
         logger.debug("Renamed ESTATUS_METADATA to ESTATUS")
     else:
         logger.warning("ESTATUS_METADATA column not found; ESTATUS rename skipped")
@@ -48,13 +54,18 @@ def integrate_data(consolidated_df: pd.DataFrame) -> pd.DataFrame:
     consolidated_df["Tipo de cambio"] = pd.to_numeric(
         consolidated_df["Tipo de cambio"], errors="coerce"
     )
-    logger.debug("Converted Tipo de cambio to numeric",
-                 extra={"unique_tc_values": consolidated_df["Tipo de cambio"].unique().tolist()})
+    logger.debug(
+        "Converted Tipo de cambio to numeric",
+        extra={"unique_tc_values": consolidated_df["Tipo de cambio"].unique().tolist()},
+    )
 
     consolidated_df["Tipo de cambio"].unique()
 
     normalized_df = normalize_concepts(consolidated_df)
-    logger.info("normalize_concepts completed", extra={"rows_after": int(normalized_df.shape[0])})
+    logger.info(
+        "normalize_concepts completed",
+        extra={"rows_after": int(normalized_df.shape[0])},
+    )
 
     try:
         normalized_df["TOTAL CONCEPTO MXN"] = np.where(
@@ -65,44 +76,214 @@ def integrate_data(consolidated_df: pd.DataFrame) -> pd.DataFrame:
     except Exception as e:
         logger.exception("Error computing TOTAL CONCEPTO MXN", exc_info=e)
         raise
-    # Normalize the columns to lowercase text so that searches do not fail due to an uppercase letter or a space.
-    concepto = normalized_df["CONCEPTO"].astype(str).str.lower()
+    # # Normalize the columns to lowercase text so that searches do not fail due to an uppercase letter or a space.
+    # concepto = normalized_df["CONCEPTO"].astype(str).str.lower()
+    # serie = (
+    #     normalized_df["SERIE"].astype(str).str.strip().str.upper()
+    # )  # Serie a mayúsculas
+    # contrato = normalized_df["CONTRATO"].astype(str).str.lower()
+    # iva = normalized_df["% DE IVA POR CONCEPTO"].astype(str).str.lower()
+    concepto = (
+        normalized_df["CONCEPTO"]
+            .fillna("")
+            .astype(str)
+            .str.lower()
+            .str.strip()
+        )
+
+    contrato = (
+        normalized_df["CONTRATO"]
+        .fillna("")
+        .astype(str)
+        .str.lower()
+        .str.strip()
+    )
+
     serie = (
-        normalized_df["SERIE"].astype(str).str.strip().str.upper()
-    )  # Serie a mayúsculas
-    contrato = normalized_df["CONTRATO"].astype(str).str.lower()
-    iva = normalized_df["% DE IVA POR CONCEPTO"].astype(str).str.lower()
-    # Define the conditions and corresponding prefixes for the 'Prefijo' column based on the specified rules.
-    # WARNING: The order of the conditions matters. More specific conditions should be placed before more general ones to avoid conflicts.
+        normalized_df["SERIE"]
+        .fillna("")
+        .astype(str)
+        .str.upper()
+        .str.strip()
+    )
+
+    iva = (
+        normalized_df["% DE IVA POR CONCEPTO"]
+        .fillna("")
+        .astype(str)
+        .str.lower()
+        .str.strip()
+    )
+
+    # ==================================
+    # IVA normalizado
+    # ==================================
+
+    iva_16 = iva.isin([
+        "16",
+        "16%",
+        "16.0",
+        "16.00"
+    ])
+
+    iva_0 = iva.isin([
+        "0",
+        "0%",
+        "0.0",
+        "0.00",
+        "exento"
+    ])
+
+    # ==================================
+    # Reglas
+    # ==================================
+
     condiciones = [
-        # ---- Reglas combinadas de Concepto + IVA ----
-        (concepto.str.contains("renta anticipada")) & (iva.str.contains("16")),
-        (concepto.str.contains("renta anticipada")) & (iva.str.contains("0|exento")),
-        (concepto.str.contains("renta")) & (iva.str.contains("16")),
-        (concepto.str.contains("renta")) & (iva.str.contains("0|exento")),
-        (concepto.str.contains("venta")) & (iva.str.contains("16")),
-        (concepto.str.contains("venta")) & (iva.str.contains("0|exento")),
-        # ---- Reglas específicas de Concepto ----
-        (concepto.str.contains("seguro de vida|prima de seguro de vida")),
-        (concepto.str.contains("seguro equipo|seguro resp civil")),
-        (concepto.str.contains("subsidio|comisión mercantil")),
-        (concepto.str.contains("arrendamiento financiero")),
-        (concepto.str.contains("comisión por apertura")),
-        (concepto.str.contains("gastos de administración")),
-        (concepto.str.contains("opción a compra")),
-        (concepto.str.contains("osprey")),
-        (concepto.str.contains("prima seguros")),
-        (concepto.str.contains("reembolso|daños de equipo")),
-        (serie == "DE"),
-        (contrato.str.contains("factoraje")),
-        (contrato.str.contains("arrendamiento instalaciones")),
-        (contrato.str.contains("udi")),
+
+        # REN ANT
+        concepto.str.contains(
+            r"\brenta anticipada\b",
+            regex=True,
+            na=False
+        ) & iva_16,
+
+        # REN ANT 0%
+        concepto.str.contains(
+            r"\brenta anticipada\b",
+            regex=True,
+            na=False
+        ) & iva_0,
+
+        # REN
+        (
+            concepto.str.contains(r"\brenta\b", regex=True, na=False)
+            &
+            ~concepto.str.contains(r"\brenta anticipada\b", regex=True, na=False)
+            &
+            iva_16
+        ),
+
+        # REN 0%
+        (
+            concepto.str.contains(r"\brenta\b", regex=True, na=False)
+            &
+            ~concepto.str.contains(r"\brenta anticipada\b", regex=True, na=False)
+            &
+            iva_0
+        ),
+
+        # VEN
+        concepto.str.contains(
+            r"\bventa\b",
+            regex=True,
+            na=False
+        ) & iva_16,
+
+        # VEN 0%
+        concepto.str.contains(
+            r"\bventa\b",
+            regex=True,
+            na=False
+        ) & iva_0,
+
+        # SEG VIDA
+        concepto.str.contains(
+            r"seguro de vida|prima de seguro de vida",
+            regex=True,
+            na=False
+        ),
+
+        # SEG
+        concepto.str.contains(
+            r"seguro equipo|seguro resp civil",
+            regex=True,
+            na=False
+        ),
+
+        # SUB
+        concepto.str.contains(
+            r"subsidio|comisión mercantil|comision mercantil",
+            regex=True,
+            na=False
+        ),
+
+        # GAS
+        concepto.str.contains(
+            r"gastos de administración|gastos de administracion",
+            regex=True,
+            na=False
+        ),
+
+        # OPC
+        concepto.str.contains(
+            r"opción a compra|opcion a compra",
+            regex=True,
+            na=False
+        ),
+
+        # OSPREY
+        concepto.str.contains(
+            r"osprey",
+            na=False
+        ),
+
+        # PRI
+        concepto.str.contains(
+            r"prima seguros",
+            na=False
+        ),
+
+        # REEMBOLSO
+        concepto.str.contains(
+            r"reembolso|daños de equipo|danos de equipo",
+            regex=True,
+            na=False
+        ),
+
+        # ARR
+        concepto.str.contains(
+            r"arrendamiento financiero",
+            na=False
+        ),
+
+        # COM
+        concepto.str.contains(
+            r"comisión por apertura|comision por apertura",
+            regex=True,
+            na=False
+        ),
+
+        # DE
+        serie.eq("DE"),
+
+        # FACTORAJE
+        contrato.str.contains(
+            r"\bfactoraje\b",
+            regex=True,
+            na=False
+        ),
+
+        # SUBARR
+        contrato.str.contains(
+            r"arrendamiento instalaciones",
+            na=False
+        ),
+
+        # UDI
+        contrato.str.contains(
+            r"\budi\b",
+            regex=True,
+            na=False
+        ),
     ]
     normalized_df["IVA"] = normalized_df["IVA"].fillna("-")
 
     try:
         normalized_df["PREFIJO"] = np.select(condiciones, prefixes, default="OTH")
-        logger.debug("Prefijo assigned", extra={"prefixes_used": list(set(normalized_df["PREFIJO"].tolist()))})
+        logger.debug(
+            "Prefijo assigned",
+            extra={"prefixes_used": list(set(normalized_df["PREFIJO"].tolist()))},
+        )
     except Exception as e:
         logger.exception("Error assigning PREFIJO", exc_info=e)
         raise
@@ -117,7 +298,9 @@ def integrate_data(consolidated_df: pd.DataFrame) -> pd.DataFrame:
     normalized_column_names = edicom_column_names | metadata_column_names
     normalized_df = normalized_df.rename(columns=normalized_column_names)
 
-    logger.info("integrate_data completed", extra={"final_rows": int(normalized_df.shape[0])})
+    logger.info(
+        "integrate_data completed", extra={"final_rows": int(normalized_df.shape[0])}
+    )
     return normalized_df
 
 
@@ -149,7 +332,8 @@ def normalize_concepts(wide_df: pd.DataFrame) -> pd.DataFrame:
     try:
         for i in indxs:
             concepto = next(
-                (c for c in (f"CONCEPTO{i}", f"CONCEPT1{i}") if c in wide_df.columns), None
+                (c for c in (f"CONCEPTO{i}", f"CONCEPT1{i}") if c in wide_df.columns),
+                None,
             )
 
             total = f"TOTALCONCEPTO{i}"
@@ -159,7 +343,9 @@ def normalize_concepts(wide_df: pd.DataFrame) -> pd.DataFrame:
                 logger.debug("No concepto column for index", extra={"index": i})
                 continue
 
-            cols_presentes = [c for c in [concepto, total, clave] if c in wide_df.columns]
+            cols_presentes = [
+                c for c in [concepto, total, clave] if c in wide_df.columns
+            ]
 
             mask = wide_df[cols_presentes].notna().any(axis=1)
             df_temp = pd.DataFrame(
@@ -191,8 +377,8 @@ def normalize_concepts(wide_df: pd.DataFrame) -> pd.DataFrame:
     logger.info("Concatenated long dataframe", extra={"rows": int(long_df.shape[0])})
     # Ensure UUID exists before sort
     if "UUID" in long_df.columns:
-        long_df['priority'] = (long_df['OBSERVACIONES'] == '-').astype(int)
-        df_sorted = long_df.sort_values(['UUID', 'priority']).drop(columns='priority')
+        long_df["priority"] = (long_df["OBSERVACIONES"] == "-").astype(int)
+        df_sorted = long_df.sort_values(["UUID", "priority"]).drop(columns="priority")
     else:
         logger.warning("UUID column not present; skipping sort")
         df_sorted = long_df
