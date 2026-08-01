@@ -7,6 +7,7 @@ BASE_DIR = Path(__file__).parent.parent
 
 METADATA_FOLDER_NAME = BASE_DIR / "data" / "metadata"
 EDICOM_FOLDER_NAME = BASE_DIR / "data" / "edicom"
+EDICOM_LOG_FOLDER_NAME = EDICOM_FOLDER_NAME / "logs"
 OUTPUT_FOLDER = BASE_DIR / "data" / "output"
 
 load_dotenv(BASE_DIR / ".env")

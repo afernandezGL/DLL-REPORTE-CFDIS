@@ -1,12 +1,19 @@
 cfdi_query = """
     SELECT
-        rff.UUID_PADRE as UUID,
-        TASA,
-        rbi.USO_CFDI CFDI_USE 
-    FROM DLL.SAT.REPORTE_FACTURACION_FINAL rff
-    LEFT JOIN DLL.SAT.REPORTE_BASICO_IMPUESTOS rbi
-        ON rff.UUID_PADRE = rbi.UUID
-    
+        UUID,
+        RFC_EMISOR,
+        TIPO_CAMBIO,
+        USO_CFDI as CFDI_USE,
+        CONCEPTO_IVA,
+        BASE_CFDI AS TOTAL_CONCEPTO,
+        CONCEPTO_ID,
+        TOTAL_MXN,
+        TIPO_ESTATUS
+    FROM DLL.SAT.REPORTE_BASICO_CONCEPTOS_IMPUESTOS   
     """
 
-"WHERE FORMAT(rbi.FECHA, 'yyyy-MM') = %(period)s"
+# cfdi_query = """
+#     SELECT
+#         *
+#     FROM DLL.SAT.REPORTE_BASICO_IMPUESTOS rbi    
+#     """

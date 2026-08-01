@@ -2,7 +2,7 @@
 
 ## Visión general
 
-Este repositorio contiene un pipeline en Python para consolidar información de CFDI, Edicom, metadata y Banxico en un único reporte en Excel para un periodo determinado. El flujo está estructurado alrededor de un script principal de orquestación, cargadores de datos, lógica de transformación, reglas de integración y una etapa de exportación.
+Este repositorio contiene un pipeline en Python para consolidar información de CFDI, Edicom y metadata en un único reporte en Excel para un periodo determinado. El flujo está estructurado alrededor de un script principal de orquestación, cargadores de datos, lógica de transformación, reglas de integración y una etapa de exportación.
 
 ## Objetivo de negocio
 
@@ -22,7 +22,7 @@ La solución sigue una arquitectura sencilla tipo ETL:
 1. Ingesta de datos
    - los archivos de metadata se leen desde la carpeta de metadata,
    - los datos de Edicom se leen desde archivos Excel,
-   - los datos de CFDI y Banxico se obtienen mediante consultas SQL.
+   - los datos de CFDI se obtienen mediante consultas SQL.
 2. Transformación
    - se estandarizan los nombres de columnas,
    - se convierten y enriquecen los campos de fecha,
@@ -63,7 +63,7 @@ scr/DLL-Pipeline.py
   - data/metadata/: archivos ZIP de metadata esperados por el loader.
   - data/edicom/: archivos Excel de Edicom esperados por el loader.
   - data/output/: reportes Excel generados.
-  - data/sql/: definiciones de consultas SQL para CFDI y Banxico.
+  - data/sql/: definiciones de consultas SQL para CFDI.
 - scr/: lógica de la aplicación.
   - scr/DLL-Pipeline.py: punto de entrada principal de la orquestación.
   - scr/loader.py: carga de datos desde archivos y SQL.

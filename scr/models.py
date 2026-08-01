@@ -21,7 +21,7 @@ raw_edicom_column_names = [
 ]
 
 patterns_raw_edicom_column_names = [
-    "CONCEPTO", #Careful with this pattern, it can match other columns that contain the word "CONCEPT"
+    "CONCEPTO",  # Careful with this pattern, it can match other columns that contain the word "CONCEPT"
     "CONCEPT",
     "TOTALCONCEPTO",
     "CLAVEPRODSERVCONCEPTO",
@@ -56,6 +56,31 @@ patterns_normalized_edicom_column_names = [
     "CÓDIGO PRODUCTO",
 ]
 
+edicom_log_column_names = [
+    "ESTATUS",
+    "TIPODECOMPROBANTE",
+    "SERIE",
+    "FOLIO",
+    "FECHAREAL",
+    "FECHADOCUMENTO",
+    "UUID",
+    "SUBTOTAL",
+    "IVA",
+    "TOTAL",
+    "RECEPTORRFC",
+    "RECEPTOR NOMBRE",
+    "METODOPAGO",
+    "MONEDA",
+    "CONTRATO",
+    "OBSERVACIONES",
+    "CONTRATO (CLAVE)",
+    "% DE IVA",
+    "Contrato MID",
+    "CONCEPTO",
+    "TOTAL CONCEPTO",
+    "CÓDIGO PRODUCTO",
+]
+
 edicom_id = "UUID"
 metadata_id = "Uuid"
 cfdi_id = "UUID"
@@ -80,7 +105,7 @@ raw_metadata_column_names = [
     "Monto",
     "FechaEmision",
     "Estatus",
-    "FechaCancelacion"
+    "FechaCancelacion",
 ]
 
 normalized_metadata_column_names = [
@@ -88,7 +113,7 @@ normalized_metadata_column_names = [
     "TOTAL METADATA",
     "FECHA EMISIÓN METADATA",
     "Estatus",
-    "FECHA DE CANCELACIÓN"
+    "FECHA DE CANCELACIÓN",
 ]
 
 CFDI_USE_MAP = {
@@ -115,17 +140,31 @@ CFDI_USE_MAP = {
     "D10": "Pagos por servicios educativos (colegiaturas)",
     "S01": "Sin efectos fiscales",
     "CP01": "Pagos",
-    "CN01": "Nómina"
+    "CN01": "Nómina",
 }
 
 prefixes = [
-        'REN ANT', 'REN ANT 0%', 'REN', 'REN 0%',
-        'VEN', 'VEN 0%',
-        'SEG VIDA', 'SEG', 'SUB',
-        'ARR', 'COM', 'GAS', 'OPC', 'OSPREY', 'PRI', 'REEMBOLSO',
-        'DE',
-        'Factoraje', 'SUBARR', 'UDI'
-    ]
+    "REN ANT",
+    "REN ANT 0%",
+    "REN",
+    "REN 0%",
+    "VEN",
+    "VEN 0%",
+    "SEG VIDA",
+    "SEG",
+    "SUB",
+    "ARR",
+    "COM",
+    "GAS",
+    "OPC",
+    "OSPREY",
+    "PRI",
+    "REEMBOLSO",
+    "DE",
+    "Factoraje",
+    "SUBARR",
+    "UDI",
+]
 
 prefixes = [
     "REN ANT",
@@ -148,4 +187,24 @@ prefixes = [
     "Factoraje",
     "SUBARR",
     "UDI",
+    "INT MOR",
+    "INT 16%",
+    "INT ARR FIN",
+    "INT 0%",
+    "INT EXE",
+]
+
+MONTHS = [
+    "Enero",
+    "Febrero",
+    "Marzo",
+    "Abril",
+    "Mayo",
+    "Junio",
+    "Julio",
+    "Agosto",
+    "Septiembre",
+    "Octubre",
+    "Noviembre",
+    "Diciembre",
 ]

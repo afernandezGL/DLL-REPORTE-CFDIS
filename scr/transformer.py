@@ -1,4 +1,5 @@
 import logging
+import re
 import pandas as pd
 import numpy as np
 from scr.models import (
@@ -13,6 +14,78 @@ from scr.models import (
 
 logger = logging.getLogger(__name__)
 
+def normalize_concepts(wide_df: pd.DataFrame) -> pd.DataFrame:
+    logger.debug("Starting normalize_concepts", extra={"rows": int(wide_df.shape[0])})
+    base_cols = [
+        c
+        for c in wide_df.columns
+        if not re.match(
+            r"^(CONCEPTO|CONCEPT1|TOTALCONCEPTO|CLAVEPRODSERVCONCEPTO)\d+$", c
+        )
+    ]
+
+    indxs = sorted(
+        {
+            int(re.search(r"(\d+)$", c).group(1))
+            for c in wide_df.columns
+            if re.search(r"(\d+)$", c)
+            and re.match(
+                r"^(CONCEPTO|CONCEPT1|TOTALCONCEPTO|CLAVEPRODSERVCONCEPTO)\d+$",
+                c,
+                re.IGNORECASE,
+            )
+        }
+    )
+    logger.debug("Found concept indices", extra={"indices": indxs})
+
+    long_dfs = []
+    try:
+        for i in indxs:
+            concepto = next(
+                (c for c in (f"CONCEPTO{i}", f"CONCEPT1{i}") if c in wide_df.columns),
+                None,
+            )
+
+            total = f"TOTALCONCEPTO{i}"
+            clave = f"CLAVEPRODSERVCONCEPTO{i}"
+
+            if concepto is None:
+                logger.debug("No concepto column for index", extra={"index": i})
+                continue
+
+            cols_presentes = [
+                c for c in [concepto, total, clave] if c in wide_df.columns
+            ]
+
+            mask = wide_df[cols_presentes].notna().any(axis=1)
+            df_temp = pd.DataFrame(
+                {
+                    **{c: wide_df.loc[mask, c].values for c in base_cols},
+                    "CONCEPTO": wide_df.loc[mask, concepto].values,
+                    "TOTAL CONCEPTO": (
+                        wide_df.loc[mask, total].values if total in wide_df else None
+                    ),
+                    "CÓDIGO PRODUCTO": (
+                        wide_df.loc[mask, clave].values if clave in wide_df else None
+                    ),
+                }
+            )
+            if "OBSERVACIONES" in df_temp.columns and i > 1:
+                df_temp["OBSERVACIONES"] = "-"
+                if df_temp.empty:
+                    logger.debug("df_temp is empty for index", extra={"index": i})
+            long_dfs.append(df_temp)
+    except Exception as e:
+        logger.exception("Error while normalizing concepts", exc_info=e)
+        raise
+
+    if not long_dfs:
+        logger.warning("No concept columns found; returning empty DataFrame")
+        return pd.DataFrame()
+
+    long_df = pd.concat(long_dfs, ignore_index=True)
+    logger.info("Concatenated long dataframe", extra={"rows": int(long_df.shape[0])})
+    return long_df
 
 def transform_metadata_info(raw_metadata_df: pd.DataFrame) -> pd.DataFrame:
     logger.info("Transforming metadata info", extra={"rows": int(raw_metadata_df.shape[0])})
@@ -22,7 +95,11 @@ def transform_metadata_info(raw_metadata_df: pd.DataFrame) -> pd.DataFrame:
     new_metadata_df["FechaEmision"] = pd.to_datetime(
         new_metadata_df["FechaEmision"], format="%Y-%m-%d %H:%M:%S"
     )
+    new_metadata_df["FechaCancelacion"] = pd.to_datetime(
+            new_metadata_df["FechaCancelacion"], format="%Y-%m-%d %H:%M:%S"
+        )
 
+    new_metadata_df["FechaCancelacion"] = new_metadata_df["FechaCancelacion"].dt.strftime("%d/%m/%Y")
     new_metadata_df["Fecha"] = new_metadata_df["FechaEmision"].dt.strftime("%m/%d/%Y")
     new_metadata_df["Día"] = new_metadata_df["FechaEmision"].dt.day
     new_metadata_df["Mes"] = new_metadata_df["FechaEmision"].dt.month
@@ -115,33 +192,5 @@ def transform_cfdi_info(raw_cfdi_df: pd.DataFrame) -> pd.DataFrame:
     logger.info("Transforming cfdi info", extra={"rows": int(raw_cfdi_df.shape[0])})
     transformer_cfdi_df = raw_cfdi_df.copy()
     transformer_cfdi_df["USO CFDI"] = transformer_cfdi_df["CFDI_USE"].map(CFDI_USE_MAP)
-    transformer_cfdi_df = transformer_cfdi_df.rename(columns={"TASA":"% DE IVA POR CONCEPTO"})
-    transformer_cfdi_df["% DE IVA POR CONCEPTO"] = transformer_cfdi_df["% DE IVA POR CONCEPTO"].fillna("0%")
-    transformer_cfdi_df["% DE IVA POR CONCEPTO"] = np.where(
-        transformer_cfdi_df["% DE IVA POR CONCEPTO"] == "16%",
-        transformer_cfdi_df["% DE IVA POR CONCEPTO"],
-        "Exento"
-    )
+    transformer_cfdi_df = transformer_cfdi_df.rename(columns={"CONCEPTO_IVA":"% DE IVA POR CONCEPTO"})
     return transformer_cfdi_df
-
-
-def transform_banxico_info(raw_banxico_df: pd.DataFrame) -> pd.DataFrame:
-    logger.info("Transforming banxico info", extra={"rows": int(raw_banxico_df.shape[0])})
-    transformer_banxico_df = raw_banxico_df.sort_values("FECHA_TC")
-
-    transformer_banxico_df["DETERMINACION_TC"] = transformer_banxico_df[
-        "DETERMINACION_TC"
-    ].replace(0, np.nan)
-
-    transformer_banxico_df["DETERMINACION_TC"] = transformer_banxico_df[
-        "DETERMINACION_TC"
-    ].ffill()
-    transformer_banxico_df["DETERMINACION_TC"] = transformer_banxico_df[
-        "DETERMINACION_TC"
-    ].bfill()
-
-    transformer_banxico_df["FECHA_TC"] = transformer_banxico_df["FECHA_TC"].dt.strftime(
-        "%d/%m/%Y"
-    )
-    logger.debug("Transformed banxico dataframe", extra={"rows": int(transformer_banxico_df.shape[0])})
-    return transformer_banxico_df

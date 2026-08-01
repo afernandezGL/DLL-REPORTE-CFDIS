@@ -3,10 +3,12 @@ import io
 import zipfile
 import logging
 import pandas as pd
-from config.config import METADATA_FOLDER_NAME, EDICOM_FOLDER_NAME
+from pathlib import Path
+from config.config import METADATA_FOLDER_NAME, EDICOM_FOLDER_NAME, EDICOM_LOG_FOLDER_NAME
 from scr.database import close_engine, get_engine
+from scr.models import MONTHS, edicom_log_column_names
 from data.sql.cfdi import cfdi_query
-from data.sql.banxico import banxico_query
+import csv
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +24,6 @@ def get_metadata_info(date_: str) -> pd.DataFrame:
         ValueError: If multiple .zip files are found in the specified folder.
         ValueError: If the ZIP file does not contain any .csv or .txt files.
     """
-    
     metadata_folder = os.path.join(METADATA_FOLDER_NAME, date_)
     logger.info("Loading metadata info", extra={"metadata_folder": metadata_folder})
 
@@ -47,7 +48,7 @@ def get_metadata_info(date_: str) -> pd.DataFrame:
                 logger.debug("Reading file from zip", extra={"file": name})
                 with zip_ref.open(name) as file:
                     file_data = io.BytesIO(file.read())
-                    df = pd.read_csv(file_data, sep="~", engine="python")
+                    df = pd.read_csv(file_data, sep="~", engine="python", quoting=csv.QUOTE_NONE)
                     raw_dfs.append(df)
 
     if not raw_dfs:
@@ -86,6 +87,57 @@ def get_edicom_info(date_) -> pd.DataFrame:
     logger.info("Loaded edicom dataframe", extra={"rows": int(raw_edicom_df.shape[0])})
     return raw_edicom_df
 
+def get_edicom_logs(date_: str) -> pd.DataFrame | None:
+    """
+    Get Edicom log from a Excel file in the specified folder, and save the transformed data into a pandas DataFrame.
+
+    Input:
+        str: Date str with format YYYY
+
+    Returns:
+        DataFrame: A pandas DataFrame containing the extracted raw Edicom log.
+    
+    Raises:
+        FileNotFoundError: If the specified Excel file is not found.
+    """
+    year = date_.split('_')[0]
+    month = date_.split('_')[1]
+    if month == "01":
+        return pd.DataFrame(columns=edicom_log_column_names)
+    folder = os.path.join(EDICOM_LOG_FOLDER_NAME, year)
+    year_folder = Path(folder)
+    # Search folder ending with YYYY
+
+    if not year_folder.exists():
+        year_folder = Path(folder)
+        year_folder.mkdir(parents=True, exist_ok=True)
+
+    log_dfs = []
+
+    # Months before the requested month
+    for month_name in MONTHS[int(month)-1]:
+        import pdb; pdb.set_trace()
+        file_path = year_folder / f"log_{month_name}.txt"
+
+        if not file_path.exists():
+            raise FileNotFoundError(
+                f"No se encintro el archivo {file_path}"
+            )
+
+        temp_df = pd.read_excel(file_path)
+
+        if list(temp_df.columns) != edicom_log_column_names:
+            raise ValueError(
+                f"Las Columnas no mechean en el archivo {file_path}"
+            )
+
+        log_dfs.append(temp_df)
+
+    return pd.concat(log_dfs, ignore_index=True)
+
+    
+    return raw_edicom_df
+
 def get_cfdi_info(date_: str) -> pd.DataFrame:
     """
     Get CFDI information from a Excel file in the specified folder, and save the extracted data into a pandas DataFrame.
@@ -110,28 +162,3 @@ def get_cfdi_info(date_: str) -> pd.DataFrame:
         if engine:
             close_engine(engine)
     return cfdi_raw_info_df
-
-def get_banxico_info() -> pd.DataFrame:
-    """
-    Get Banxico information from a Excel file in the specified folder, and save the extracted data into a pandas DataFrame.
-
-    Returns:
-        DataFrame: A pandas DataFrame containing the extracted raw Banxico information.
-
-    Raises:
-        Exception: If there is an error during the extraction of Banxico information from the database.
-    
-    """
-    engine = None
-    try:
-        logger.info("Fetching Banxico info from DB")
-        engine = get_engine()
-        banxico_raw_info_df = pd.read_sql(banxico_query, engine)
-        logger.info("Fetched banxico dataframe", extra={"rows": int(banxico_raw_info_df.shape[0])})
-    except Exception as e:
-        logger.exception("Error durante la extracción de Banxico", exc_info=e)
-        raise
-    finally:
-        if engine:
-            close_engine(engine)
-    return banxico_raw_info_df
