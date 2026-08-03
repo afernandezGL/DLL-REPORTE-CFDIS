@@ -13,7 +13,13 @@ from scr.stryles import BLUE, COLUMN_COLORS
 logger = logging.getLogger(__name__)
 
 
-def export_to_excel(consolidated_df: pd.DataFrame, edicom_resumen: pd.DataFrame, metadata_resumen: pd.DataFrame, factura_resumen: pd.DataFrame, date_: str) -> bool:
+def export_to_excel(
+    consolidated_df: pd.DataFrame,
+    edicom_resumen: pd.DataFrame,
+    metadata_resumen: pd.DataFrame,
+    factura_resumen: pd.DataFrame,
+    date_: str,
+) -> bool:
     """
     Exporta el DataFrame final y los resúmenes a un archivo Excel.
 
@@ -84,7 +90,7 @@ def export_to_excel(consolidated_df: pd.DataFrame, edicom_resumen: pd.DataFrame,
 
     cols_present = [c for c in columns_to_export if c in consolidated_df.columns]
     # consolidated_df[cols_present].to_excel(output_path, index=False)
-    
+
     # Crear workbook
     wb = Workbook()
 
@@ -95,11 +101,13 @@ def export_to_excel(consolidated_df: pd.DataFrame, edicom_resumen: pd.DataFrame,
     ws_salida = wb.active
     ws_salida.title = "Salida"
 
-    for row in dataframe_to_rows(consolidated_df[cols_present], index=False, header=True):
+    for row in dataframe_to_rows(
+        consolidated_df[cols_present], index=False, header=True
+    ):
         ws_salida.append(row)
 
     thin = Side(style="thin", color="000000")
-  
+
     for cell in ws_salida[1]:
         color = COLUMN_COLORS.get(str(cell.value).strip())
 
@@ -141,20 +149,21 @@ def export_to_excel(consolidated_df: pd.DataFrame, edicom_resumen: pd.DataFrame,
 
         for cell in column:
             if cell.value:
-                max_length = max(
-                    max_length,
-                    len(str(cell.value))
-                )
+                max_length = max(max_length, len(str(cell.value)))
 
-        ws_salida.column_dimensions[
-            get_column_letter(column[0].column)
-        ].width = min(max_length + 3, 40)
+        ws_salida.column_dimensions[get_column_letter(column[0].column)].width = min(
+            max_length + 3, 40
+        )
 
     # =====================================================
     # Sheet 2 - Resumen
     # =====================================================
 
     ws_resumen = wb.create_sheet("Resumen")
+
+    edicom_color = COLUMN_COLORS["ESTATUS_EDICOM"]
+    metadata_color = COLUMN_COLORS["ESTATUS METADATA"]
+    factura_color = COLUMN_COLORS["USO CFDI"]
 
     # Título principal
     ws_resumen["A1"] = year
@@ -166,41 +175,139 @@ def export_to_excel(consolidated_df: pd.DataFrame, edicom_resumen: pd.DataFrame,
     # EDICOM
     # =====================================================
 
+    edicom_title_row = current_row
+
     ws_resumen.cell(current_row, 1, "EDICOM")
     ws_resumen.cell(current_row, 1).font = Font(size=12, bold=True)
 
+    header_row = edicom_title_row + 1
     current_row += 1
 
     for row in dataframe_to_rows(edicom_resumen, index=False, header=True):
         ws_resumen.append(row)
 
+    # Título EDICOM
+    ws_resumen.cell(edicom_title_row, 1).fill = PatternFill(
+        fill_type="solid",
+        fgColor=edicom_color,
+    )
+    ws_resumen.cell(edicom_title_row, 1).font = Font(
+        bold=True,
+        size=12,
+    )
+
+    # Encabezados de la tabla EDICOM (fila 4)
+    for cell in ws_resumen[header_row]:
+        cell.fill = PatternFill(
+            fill_type="solid",
+            fgColor=edicom_color,
+        )
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+        )
+
     current_row = ws_resumen.max_row + 2
+    metadata_title_row = current_row
 
     # =====================================================
     # METADATA
     # =====================================================
 
-    ws_resumen.cell(current_row, 1, "METADATA")
-    ws_resumen.cell(current_row, 1).font = Font(size=12, bold=True)
+    ws_resumen.cell(metadata_title_row, 1, "METADATA")
+    ws_resumen.cell(metadata_title_row, 1).font = Font(size=12, bold=True)
 
+    header_row = metadata_title_row + 1
     current_row += 1
 
     for row in dataframe_to_rows(metadata_resumen, index=False, header=True):
         ws_resumen.append(row)
 
+    # Título METADATA
+    ws_resumen.cell(metadata_title_row, 1).fill = PatternFill(
+        fill_type="solid",
+        fgColor=metadata_color,
+    )
+    ws_resumen.cell(metadata_title_row, 1).font = Font(
+        bold=True,
+    )
+
+    # Encabezados de la tabla METADATA
+    for cell in ws_resumen[header_row]:
+        cell.fill = PatternFill(
+            fill_type="solid",
+            fgColor=metadata_color,
+        )
+
+        cell.font = Font(
+            bold=True
+        )
+
+        cell.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+        )
+
     current_row = ws_resumen.max_row + 2
+    factura_title_row = current_row
 
     # =====================================================
     # FACTURA
     # =====================================================
 
-    ws_resumen.cell(current_row, 1, "FACTURA")
-    ws_resumen.cell(current_row, 1).font = Font(size=12, bold=True)
+    ws_resumen.cell(factura_title_row, 1, "FACTURA")
+    ws_resumen.cell(factura_title_row, 1).font = Font(size=12, bold=True)
 
+    header_row = factura_title_row + 1
     current_row += 1
 
     for row in dataframe_to_rows(factura_resumen, index=False, header=True):
         ws_resumen.append(row)
+
+    # Título FACTURA
+    ws_resumen.cell(factura_title_row, 1).fill = PatternFill(
+        fill_type="solid",
+        fgColor=factura_color,
+    )
+    ws_resumen.cell(factura_title_row, 1).font = Font(
+        bold=True,
+        size=12,
+    )
+
+    # Encabezados de la tabla FACTURA
+    for cell in ws_resumen[header_row]:
+        cell.fill = PatternFill(
+            fill_type="solid",
+            fgColor=factura_color,
+        )
+
+        cell.font = Font(
+            bold=True,
+        )
+
+        cell.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+        )
+
+    for column in ws_resumen.columns:
+        max_length = 0
+        column_letter = get_column_letter(column[0].column)
+
+        for cell in column:
+            if cell.value is not None:
+                max_length = max(max_length, len(str(cell.value)))
+
+        ws_resumen.column_dimensions[column_letter].width = max_length + 3
+
+    # Format numeric columns
+    for row in ws_resumen.iter_rows(min_row=1):
+        for cell in row:
+
+            # B and D -> counts
+            if cell.column in [2,3,4,5]:
+                cell.number_format = '#,##0'
 
     # =====================================================
     # Guardar archivo
@@ -208,13 +315,13 @@ def export_to_excel(consolidated_df: pd.DataFrame, edicom_resumen: pd.DataFrame,
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    file_path = output_dir / f"Salida_{date_}.xlsx"
+    file_path = output_dir / f"Sofom - Amarre de facturación Invoicing con MTD SAT {date_}.xlsx"
 
     wb.save(file_path)
 
     logger.info(
         "Exported consolidated dataframe to Excel",
-        extra={"output_path": str(output_path), "rows": int(consolidated_df.shape[0])},
+        extra={"output_path": str(file_path), "rows": int(consolidated_df.shape[0])},
     )
     return True
 

@@ -1,6 +1,7 @@
 import logging
 import pandas as pd
 import numpy as np
+from scr.models import MONTHS
 
 # Module logger
 logger = logging.getLogger(__name__)
@@ -282,9 +283,7 @@ def integrate_data(consolidated_df: pd.DataFrame) -> pd.DataFrame:
 def get_summary(
     normalized_df: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    import pdb
-
-    pdb.set_trace()
+    
     edicom_base = normalized_df.groupby(["Periodo", "UUID"], as_index=False).agg(
         EDICOM_TOTAL=("TOTAL_EDICOM_MXN", "first"),
         ESTATUS_EDICOM=("ESTATUS_EDICOM", "first"),
@@ -313,6 +312,14 @@ def get_summary(
         .reset_index()
     )
 
+    edicom_resumen["Periodo"] = pd.Categorical(
+        edicom_resumen["Periodo"],
+        categories=MONTHS,
+        ordered=True
+    )
+    
+    edicom_resumen = edicom_resumen.sort_values("Periodo").reset_index(drop=True)
+
     metadata_resumen = (
         edicom_base.groupby("Periodo")
         .apply(
@@ -331,6 +338,15 @@ def get_summary(
         )
         .reset_index()
     )
+
+    metadata_resumen["Periodo"] = pd.Categorical(
+        metadata_resumen["Periodo"],
+        categories=MONTHS,
+        ordered=True
+    )
+    
+    metadata_resumen = metadata_resumen.sort_values("Periodo").reset_index(drop=True)
+    
 
     factura_resumen = (
         edicom_base.groupby("Periodo")
@@ -353,11 +369,23 @@ def get_summary(
         .reset_index()
     )
 
-    for resumen in [
-        edicom_resumen,
-        metadata_resumen,
-        factura_resumen,
-    ]:
+    factura_resumen["Periodo"] = pd.Categorical(
+        factura_resumen["Periodo"],
+        categories=MONTHS,
+        ordered=True
+    )
+
+    factura_resumen = factura_resumen.sort_values("Periodo").reset_index(drop=True)
+
+    for resumen in [edicom_resumen, metadata_resumen, factura_resumen]:
+        resumen["TOTAL_VIGENTES"] = (
+            resumen["TOTAL_VIGENTES"].round(0).astype(int)
+        )
+
+        resumen["TOTAL_CANCELADAS"] = (
+            resumen["TOTAL_CANCELADAS"].round(0).astype(int)
+        )
+
         resumen.loc[len(resumen)] = {
             "Periodo": "TOTAL",
             "N_FACTURAS_VIGENTES": resumen["N_FACTURAS_VIGENTES"].sum(),

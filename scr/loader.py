@@ -113,11 +113,9 @@ def get_edicom_logs(date_: str) -> pd.DataFrame | None:
         year_folder.mkdir(parents=True, exist_ok=True)
 
     log_dfs = []
-
     # Months before the requested month
-    for month_name in MONTHS[int(month)-1]:
-        import pdb; pdb.set_trace()
-        file_path = year_folder / f"log_{month_name}.txt"
+    for m in range(int(month) - 2, -1, -1):
+        file_path = year_folder / f"log_{MONTHS[m]}.xlsx"
 
         if not file_path.exists():
             raise FileNotFoundError(
