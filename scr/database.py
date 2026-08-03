@@ -1,3 +1,5 @@
+"""Database connection helpers for the SQLAlchemy engine used by the pipeline."""
+
 import logging
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
@@ -14,14 +16,13 @@ logger = logging.getLogger(__name__)
 
 
 def get_engine() -> Engine:
-    """
-    Create a SQLAlchemy engine for connecting to the database using the provided configuration.
+    """Create a SQLAlchemy engine for the configured database connection.
 
     Returns:
-        Engine: A SQLAlchemy engine object for database connection.
+        A SQLAlchemy Engine instance ready for executing SQL queries.
 
     Raises:
-        ValueError: If any of the required database configuration parameters are missing.
+        ValueError: If any required database configuration value is missing.
     """
 
     logger.info("Creating DB engine", extra={"server": DB_SERVER, "database": DB_DATABASE, "user": DB_USER, "port": DB_PORT})
@@ -48,11 +49,10 @@ def get_engine() -> Engine:
         raise
 
 def close_engine(engine: Engine) -> None:
-    """
-    Close the SQLAlchemy engine to release database resources.
+    """Dispose of a SQLAlchemy engine and release its connection resources.
 
     Args:
-        engine (Engine): The SQLAlchemy engine to be closed.
+        engine: The engine instance to dispose.
     """
     if engine:
         try:

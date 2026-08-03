@@ -1,106 +1,87 @@
 # DLL Reporte CFDI
 
-## Visión general
+## Introducción
 
-Este repositorio contiene un pipeline en Python para consolidar información de CFDI, Edicom y metadata en un único reporte en Excel para un periodo determinado. El flujo está estructurado alrededor de un script principal de orquestación, cargadores de datos, lógica de transformación, reglas de integración y una etapa de exportación.
+Este repositorio contiene un pipeline en Python para consolidar información de CFDI, Edicom y metadata en un reporte Excel mensual. El objetivo es unir distintas fuentes de datos y generar una vista de negocio que permita revisar, comparar y analizar información de facturación de manera más sencilla.
 
-## Objetivo de negocio
+No es una aplicación web ni un servicio en ejecución continua. Es un flujo de procesamiento por línea de comandos, pensado para ejecutarse de forma local o en entornos de automatización controlados.
 
-El proyecto busca producir un artefacto de reporte mensual que combine datasets relacionados con facturación provenientes de distintas fuentes en una vista unificada. En la práctica, el pipeline está diseñado para:
+## Qué hace este proyecto
 
-- cargar datos fuente crudos desde archivos locales y consultas SQL,
-- normalizar y enriquecer los datos,
-- aplicar reglas de negocio para comparación de estatus, manejo de moneda, normalización de conceptos y asignación de prefijos,
-- exportar un reporte consolidado a Excel.
+El flujo está diseñado para:
 
-El código sugiere un caso de uso de reporting y reconciliación, más que una aplicación transaccional.
+- leer datos fuente desde archivos locales y consultas SQL,
+- normalizar y transformar los datos a un formato consistente,
+- aplicar reglas de negocio para enriquecer la información,
+- consolidar los datasets en un único DataFrame,
+- exportar el resultado a Excel para su revisión.
 
-## Arquitectura técnica
+En términos de arquitectura, el proyecto sigue un patrón ETL simple:
 
-La solución sigue una arquitectura sencilla tipo ETL:
-
-1. Ingesta de datos
-   - los archivos de metadata se leen desde la carpeta de metadata,
-   - los datos de Edicom se leen desde archivos Excel,
-   - los datos de CFDI se obtienen mediante consultas SQL.
+1. Ingesta
 2. Transformación
-   - se estandarizan los nombres de columnas,
-   - se convierten y enriquecen los campos de fecha,
-   - se preparan datos de impuestos y uso para la lógica posterior.
 3. Integración
-   - se unen múltiples datasets,
-   - se aplican reglas de negocio para generar campos de estatus, tipo de cambio, concepto y prefijo.
 4. Exportación
-   - el dataframe consolidado se escribe en un archivo Excel dentro de la carpeta de salida.
 
-## Diagrama del flujo de datos
+## Requisitos previos
 
-```text
-CLI / entrada de usuario (--date)
-        |
-        v
-scr/DLL-Pipeline.py
-        |
-        +--> scr/loader.py
-        |       +--> archivos locales (data/metadata, data/edicom)
-        |       +--> consultas SQL (data/sql/*.py)
-        |       +--> scr/database.py
-        |
-        +--> scr/transformer.py
-        |
-        +--> scr/integration.py
-        |
-        +--> scr/export.py
-                    |
-                    v
-            data/output/<period>/report.xlsx
-```
+Antes de ejecutar el proyecto, asegúrate de tener lo siguiente:
+
+- Python 3.9 o superior
+- pip actualizado
+- acceso a una base de datos configurada para las consultas SQL
+- una conexión activa a la base de datos desde el entorno donde se ejecuta el pipeline
+- los archivos de entrada colocados en las carpetas correspondientes dentro de la estructura del repositorio
 
 ## Estructura del repositorio
 
-- config/: constantes de configuración y entorno.
-- data/: directorios de datos de entrada y salida.
-  - data/metadata/: archivos ZIP de metadata esperados por el loader.
-  - data/edicom/: archivos Excel de Edicom esperados por el loader.
-  - data/output/: reportes Excel generados.
-  - data/sql/: definiciones de consultas SQL para CFDI.
-- scr/: lógica de la aplicación.
-  - scr/DLL-Pipeline.py: punto de entrada principal de la orquestación.
-  - scr/loader.py: carga de datos desde archivos y SQL.
-  - scr/transformer.py: normalización y transformación de campos.
-  - scr/integration.py: integración con reglas de negocio y enriquecimiento de columnas.
-  - scr/export.py: exportación a Excel.
-  - scr/database.py: creación y cierre del engine de SQLAlchemy.
-  - scr/models.py: nombres de columnas compartidos, mappings y reglas de prefijos.
+- config/: configuración y variables de entorno
+- data/: datos de entrada y salida
+  - data/metadata/: archivos de metadata esperados por el loader
+  - data/edicom/: archivos fuente de Edicom
+  - data/output/: reportes generados en Excel
+  - data/sql/: consultas SQL utilizadas por el pipeline
+- scr/: lógica principal del proyecto
+  - scr/DLL-Pipeline.py: punto de entrada del flujo
+  - scr/loader.py: carga de datos desde archivos y base de datos
+  - scr/transformer.py: normalización y enriquecimiento de campos
+  - scr/integration.py: reglas de negocio y consolidación
+  - scr/export.py: exportación a Excel
+  - scr/database.py: configuración del engine SQLAlchemy
+  - scr/models.py: mappings, columnas compartidas y reglas de prefijos
+  - scr/styles.py: estilos visuales para los reportes
+- tests/: pruebas automatizadas para la lógica de integración y transformación
 
-## Dependencias entre módulos
+## Instalación paso a paso
 
-- scr/DLL-Pipeline.py es el punto de entrada y orquesta el flujo completo.
-- scr/loader.py depende de config/config.py, scr/database.py y los módulos SQL en data/sql/.
-- scr/transformer.py depende de scr/models.py para definiciones de columnas y mappings.
-- scr/integration.py depende de scr/models.py y utiliza el dataframe transformado generado por el pipeline.
-- scr/export.py consume el dataframe consolidado y escribe la salida final en Excel.
+### 1. Clonar el repositorio
 
-## Configuración del entorno
+```bash
+git clone <url-del-repositorio>
+cd DLL-REPORTE-CFDIS
+```
 
-### Versión de Python
+### 2. Crear un entorno virtual
 
-El código usa type hints modernos como tuple[...] y list[str], por lo que Python 3.9 o superior es la base más segura.
+```bash
+python -m venv .venv
+```
 
-### Dependencias
+Activarlo en Windows:
 
-Se esperan dependencias instaladas desde requirements.txt. El código importa directamente:
+```bash
+.venv\Scripts\activate
+```
 
-- pandas
-- numpy
-- SQLAlchemy
-- pymssql
-- openpyxl
-- python-dotenv
+### 3. Instalar dependencias
 
-### Configuración de .env
+```bash
+pip install -r requirements.txt
+```
 
-El proyecto lee las siguientes variables de entorno desde config/config.py:
+### 4. Crear el archivo de configuración
+
+El proyecto lee variables desde un archivo .env en la raíz del repositorio. Crea uno con el siguiente contenido:
 
 ```env
 DB_SERVER=<host de la base de datos>
@@ -110,66 +91,115 @@ DB_PASSWORD=<contraseña>
 DB_PORT=<puerto>
 ```
 
-Estos valores deben proporcionarse localmente antes de que los loaders basados en SQL puedan funcionar.
+Estas variables son necesarias para que las consultas SQL funcionen correctamente. Además, es obligatorio que exista una conexión accesible a la base de datos configurada desde el entorno donde se ejecuta el proyecto.
 
-## Configuración local
+## Preparación de datos de entrada
 
-1. Crear y activar un entorno virtual de Python.
-2. Instalar dependencias:
+Antes de ejecutar el pipeline, asegúrate de dejar los datos en las rutas esperadas:
 
-```bash
-pip install -r requirements.txt
-```
+- data/metadata/<periodo>/: archivos que el loader pueda procesar
+- data/edicom/<periodo>/: archivos fuente de Edicom
+- data/sql/: consultas SQL definidas para CFDI
 
-3. Crear un archivo .env en la raíz del proyecto con las variables de base de datos listadas anteriormente.
-4. Colocar los archivos de entrada en las carpetas esperadas:
-   - data/metadata/<period>/ con un archivo ZIP que contenga archivos .csv o .txt.
-   - data/edicom/<period>/ con un archivo .xlsx.
-   - Las consultas SQL bajo data/sql/ se ejecutarán contra la base de datos configurada.
+La estructura de carpetas debe mantenerse consistente con la lógica del loader.
 
-## Ejecución
+## Ejecución del pipeline
 
-### Desde la línea de comandos
-
-Ejecutar el pipeline desde la raíz del repositorio:
+Desde la raíz del proyecto, ejecuta:
 
 ```bash
 python scr/DLL-Pipeline.py --date 2026_01
 ```
 
-### Notas sobre el parámetro de fecha
+### Nota importante sobre la fecha
 
-El argumento CLI se recibe como --date. La lógica de validación del código usa el formato YYYY_MM, mientras que el texto de ayuda actual menciona YYYY-MM. Esta diferencia debería aclararse o alinearse en una futura revisión.
+El parámetro esperado por el código es en formato YYYY_MM. Por ejemplo:
 
-El archivo de salida se escribe en:
+- 2026_01
+- 2026_02
+- 2026_04
+
+Aunque el texto de ayuda puede mostrar un formato distinto, la validación del script espera el formato con guion bajo.
+
+## Salida esperada
+
+Si el proceso termina correctamente, el reporte se generará en la carpeta:
 
 ```text
-data/output/<period>/
+data/output/<periodo>/
 ```
 
-con un nombre que sigue el patrón utilizado en el código de exportación.
+El resultado final se exporta en formato Excel y queda listo para revisión.
 
-## Buenas prácticas de mantenimiento
+## Flujo interno del proyecto
 
-- Mantener las reglas de negocio centralizadas en scr/integration.py y scr/models.py en lugar de dispersarlas entre módulos.
-- Evitar hard-code de nombres de columnas en múltiples lugares cuando sea posible; usar los mappings de scr/models.py como fuente única de verdad.
-- Documentar el contrato de datos para cada fuente de entrada, especialmente para los archivos de metadata y Edicom.
-- Eliminar declaraciones temporales de depuración antes de pasar el código a producción.
-- Fijar versiones de dependencias en requirements.txt para mejorar la reproducibilidad.
-- Agregar pruebas automatizadas para la lógica de transformación e integración a medida que el proyecto crezca.
+```text
+CLI (--date)
+  |
+  v
+scr/DLL-Pipeline.py
+  |
+  +--> scr/loader.py
+  |      +--> archivos locales
+  |      +--> consultas SQL
+  |      +--> scr/database.py
+  |
+  +--> scr/transformer.py
+  |
+  +--> scr/integration.py
+  |
+  +--> scr/export.py
 
-## Posibles puntos de extensión
+```
 
-La implementación actual es funcional para un flujo único de pipeline, pero las siguientes mejoras harían el proyecto más robusto y mantenible:
+## Pruebas
 
-- parametrizar el nombrado de salidas y la selección de columnas,
-- introducir pruebas unitarias e de integración,
-- reemplazar los strings inline de SQL por plantillas versionadas o stored procedures,
-- soportar fuentes de entrada adicionales o formatos de salida,
-- agregar automatización CI/CD y scripts de despliegue.
+El repositorio incluye pruebas básicas para validar la lógica de integración y normalización:
 
-## Notas importantes
+```bash
+pytest
+```
 
-- Este README se elaboró a partir del código y la estructura actual del repositorio.
-- Algunos detalles, como el esquema exacto de la base de datos y las reglas de negocio completas, se infirieron de la implementación y deberían validarse con los sistemas fuente.
-- No se encontró una suite de pruebas automatizadas ni un pipeline de CI en el repositorio al momento de esta actualización de documentación.
+Estas pruebas ayudan a proteger reglas de negocio críticas y a evitar regresiones cuando el código cambia.
+
+## Buenas prácticas de desarrollo
+
+Para mantener el proyecto estable y fácil de extender:
+
+- centralizar las reglas de negocio en los módulos de integración y modelos,
+- evitar duplicar nombres de columnas o transformaciones en varios lugares,
+- documentar los contratos de entrada cuando cambien las fuentes de datos,
+- mantener las dependencias reproducibles mediante requirements.txt,
+- revisar y limpiar logs temporales antes de pasar cambios a producción.
+
+## Troubleshooting
+
+### Error: ModuleNotFoundError
+
+Esto suele pasar cuando el entorno virtual no está activado o las dependencias no se instalaron correctamente.
+
+Solución:
+
+```bash
+pip install -r requirements.txt
+```
+
+### Error: fecha inválida
+
+El formato correcto es YYYY_MM, por ejemplo 2026_01.
+
+### Error de conexión a base de datos
+
+Verifica que las variables de entorno en .env sean correctas y que el host, puerto y credenciales sean válidos. También es necesario que exista una conexión activa a la base de datos desde el entorno donde se ejecuta el pipeline.
+
+### No se genera el archivo de salida
+
+Revisa que:
+
+- los datos de entrada existan en las carpetas esperadas,
+- el periodo solicitado sea válido,
+- el proceso no haya terminado con errores antes de la exportación.
+
+## Notas finales
+
+Este README fue pensado para que una persona nueva en el proyecto pueda entender rápidamente qué hace el repositorio, cómo configurarlo y cómo ejecutarlo. Si el proyecto crece, conviene seguir mejorando la documentación de cada fuente de datos, así como agregar más pruebas y automatización de despliegue.

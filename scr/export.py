@@ -1,5 +1,6 @@
+"""Excel export helpers for writing the consolidated report and summary sheets."""
+
 import logging
-from turtle import color
 import pandas as pd
 from pathlib import Path
 from openpyxl import Workbook
@@ -13,24 +14,27 @@ from scr.stryles import BLUE, COLUMN_COLORS
 logger = logging.getLogger(__name__)
 
 
-def export_to_excel(
+def export_to_client_format(
     consolidated_df: pd.DataFrame,
     edicom_resumen: pd.DataFrame,
     metadata_resumen: pd.DataFrame,
     factura_resumen: pd.DataFrame,
     date_: str,
 ) -> bool:
-    """
-    Exporta el DataFrame final y los resúmenes a un archivo Excel.
+    """Export the consolidated dataset and monthly summaries to an Excel workbook.
+
+    The function creates a workbook with a detailed output sheet and a summary
+    sheet containing the Edicom, metadata, and CFDI recap sections.
 
     Args:
-        consolidated_df (pd.DataFrame): DataFrame final con los datos procesados.
-        edicom_resumen (pd.DataFrame): Resumen de Edicom.
-        metadata_resumen (pd.DataFrame): Resumen de metadata.
-        factura_resumen (pd.DataFrame): Resumen de facturas.
-        date_ (str): Fecha para nombrar el archivo de salida.
+        consolidated_df: The fully processed and reconciled dataset.
+        edicom_resumen: Summary statistics for Edicom results.
+        metadata_resumen: Summary statistics for metadata results.
+        factura_resumen: Summary statistics for CFDI invoice results.
+        date_: Period identifier used in the output file name.
+
     Returns:
-        bool: True si la exportación fue exitosa.
+        True when the export completes successfully.
     """
     columns_to_export = [
         "RFC_EMISOR",
@@ -327,12 +331,14 @@ def export_to_excel(
 
 
 def save_log(normalize_transformed_edicom_info_df: pd.DataFrame, date_: str) -> bool:
-    """
-    Exporta el DataFrame final a un archivo Excel.
+    """Persist the transformed Edicom log rows to an Excel workbook.
 
     Args:
-        consolidated_df (pd.DataFrame): DataFrame final con los datos procesados.
-        date_ (str): Fecha para nombrar el archivo de salida.
+        normalize_transformed_edicom_info_df: The transformed Edicom rows to store.
+        date_: Period identifier used to locate the target log file.
+
+    Returns:
+        True when the log workbook is written successfully.
     """
     year = date_.split("_")[0]
     month = date_.split("_")[1]

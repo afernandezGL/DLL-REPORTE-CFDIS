@@ -1,3 +1,5 @@
+"""Helpers for loading source data from metadata archives, Edicom files, and the CFDI database."""
+
 import os
 import io
 import zipfile
@@ -13,16 +15,22 @@ import csv
 logger = logging.getLogger(__name__)
 
 def get_metadata_info(date_: str) -> pd.DataFrame:
-    """
-    Get metadata information from a ZIP file in the specified folder, and save the extracted data into a pandas DataFrame.
+    """Load raw metadata rows from the ZIP archive for a given period.
+
+    The function scans the metadata directory for the requested period, reads every
+    CSV or TXT file contained in the single ZIP archive, and returns the combined
+    content as a single pandas DataFrame.
+
+    Args:
+        date_: Period identifier in the YYYY_MM format.
 
     Returns:
-        DataFrame: A pandas DataFrame containing the extracted raw metadata information.
+        A DataFrame containing the raw metadata rows extracted from the archive.
 
     Raises:
-        FileNotFoundError: If no .zip file is found in the specified folder.
-        ValueError: If multiple .zip files are found in the specified folder.
-        ValueError: If the ZIP file does not contain any .csv or .txt files.
+        FileNotFoundError: If no ZIP archive is found for the requested period.
+        ValueError: If multiple ZIP archives are present or the archive contains no
+            readable CSV/TXT content.
     """
     metadata_folder = os.path.join(METADATA_FOLDER_NAME, date_)
     logger.info("Loading metadata info", extra={"metadata_folder": metadata_folder})
@@ -59,14 +67,17 @@ def get_metadata_info(date_: str) -> pd.DataFrame:
     return raw_metadata_df
 
 def get_edicom_info(date_) -> pd.DataFrame:
-    """
-    Get Edicom information from a Excel file in the specified folder, and save the extracted data into a pandas DataFrame.
+    """Load raw Edicom data from the workbook stored for the requested period.
+
+    Args:
+        date_: Period identifier in the YYYY_MM format.
 
     Returns:
-        DataFrame: A pandas DataFrame containing the extracted raw Edicom information.
-    
+        A DataFrame containing the raw Edicom content from the Excel workbook.
+
     Raises:
-        FileNotFoundError: If the specified Excel file is not found.
+        FileNotFoundError: If no XLSX workbook is found for the requested period.
+        ValueError: If multiple workbook files are present in the target folder.
     """
 
     folder = os.path.join(EDICOM_FOLDER_NAME, date_)
@@ -88,17 +99,21 @@ def get_edicom_info(date_) -> pd.DataFrame:
     return raw_edicom_df
 
 def get_edicom_logs(date_: str) -> pd.DataFrame | None:
-    """
-    Get Edicom log from a Excel file in the specified folder, and save the transformed data into a pandas DataFrame.
+    """Load prior Edicom log files for the same year to build historical context.
 
-    Input:
-        str: Date str with format YYYY
+    For months after January, the function collects the log workbooks from the
+    previous months in the same year and returns them as a single DataFrame.
+    January returns an empty structure to seed the historical log.
+
+    Args:
+        date_: Period identifier in the YYYY_MM format.
 
     Returns:
-        DataFrame: A pandas DataFrame containing the extracted raw Edicom log.
-    
+        A DataFrame containing the historical Edicom log rows for the requested year.
+
     Raises:
-        FileNotFoundError: If the specified Excel file is not found.
+        FileNotFoundError: If a required monthly log workbook is missing.
+        ValueError: If the workbook columns do not match the expected log schema.
     """
     year = date_.split('_')[0]
     month = date_.split('_')[1]
@@ -137,15 +152,16 @@ def get_edicom_logs(date_: str) -> pd.DataFrame | None:
     return raw_edicom_df
 
 def get_cfdi_info(date_: str) -> pd.DataFrame:
-    """
-    Get CFDI information from a Excel file in the specified folder, and save the extracted data into a pandas DataFrame.
+    """Fetch raw CFDI rows from the configured database for the requested period.
+
+    Args:
+        date_: Period identifier in the YYYY_MM format.
 
     Returns:
-        DataFrame: A pandas DataFrame containing the extracted raw CFDI information.
+        A DataFrame containing the raw CFDI rows retrieved from the database.
 
     Raises:
-        Exception: If there is an error during the extraction of CFDI information from the database.
-    
+        Exception: If the query execution or connection handling fails.
     """
     engine = None
     try:

@@ -1,3 +1,5 @@
+"""Transformation utilities for normalizing and enriching source datasets before consolidation."""
+
 import logging
 import re
 import pandas as pd
@@ -15,6 +17,19 @@ from scr.models import (
 logger = logging.getLogger(__name__)
 
 def normalize_concepts(wide_df: pd.DataFrame) -> pd.DataFrame:
+    """Convert wide concept columns into a long-form DataFrame.
+
+    The source files may contain concept-related columns such as CONCEPTO1,
+    TOTALCONCEPTO1, and CLAVEPRODSERVCONCEPTO1 across multiple repeated groups.
+    This function reshapes those columns into a normalized structure with a single
+    concept row per record.
+
+    Args:
+        wide_df: A DataFrame containing one or more repeated concept column groups.
+
+    Returns:
+        A normalized DataFrame with concept, total, and product-code columns.
+    """
     logger.debug("Starting normalize_concepts", extra={"rows": int(wide_df.shape[0])})
     base_cols = [
         c
@@ -88,6 +103,14 @@ def normalize_concepts(wide_df: pd.DataFrame) -> pd.DataFrame:
     return long_df
 
 def transform_metadata_info(raw_metadata_df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize metadata rows into the format expected by downstream integration logic.
+
+    Args:
+        raw_metadata_df: Raw metadata rows read from the input archive.
+
+    Returns:
+        A transformed DataFrame with standardized dates, period fields, and status values.
+    """
     logger.info("Transforming metadata info", extra={"rows": int(raw_metadata_df.shape[0])})
     selected_raw_metadata_cols = get_metadata_normalized_column_names(raw_metadata_df)
     old_metadata_df = raw_metadata_df[selected_raw_metadata_cols]
@@ -117,7 +140,17 @@ def transform_metadata_info(raw_metadata_df: pd.DataFrame) -> pd.DataFrame:
     return new_metadata_df
 
 def get_metadata_normalized_column_names(raw_metadata_df: pd.DataFrame) -> list[str]:
-    ## Check if all raws_metadata_column_names are present in the raw_metadata_df
+    """Validate that the required metadata columns are present before transformation.
+
+    Args:
+        raw_metadata_df: Raw metadata DataFrame to inspect.
+
+    Returns:
+        The ordered list of metadata columns required for transformation.
+
+    Raises:
+        ValueError: If any required metadata column is missing.
+    """
     missing_columns = [
         col for col in raw_metadata_column_names if col not in raw_metadata_df.columns
     ]
@@ -130,6 +163,17 @@ def get_metadata_normalized_column_names(raw_metadata_df: pd.DataFrame) -> list[
 
 
 def get_edicom_normalized_column_names(raw_edicom_df: pd.DataFrame) -> list[str]:
+    """Select and validate the Edicom columns needed for transformation.
+
+    Args:
+        raw_edicom_df: Raw Edicom workbook content.
+
+    Returns:
+        The normalized column list that will be used for the transformation step.
+
+    Raises:
+        ValueError: If the source schema does not match the expected layout.
+    """
     edicom_colname = list(raw_edicom_df.columns)
     clean_edicom_colname = [n for n in edicom_colname if "Unnamed" not in n]
     logger.debug("Inspecting edicom columns", extra={"columns": clean_edicom_colname})
@@ -158,6 +202,17 @@ def get_edicom_normalized_column_names(raw_edicom_df: pd.DataFrame) -> list[str]
 
 
 def transform_edicom_info(raw_edicom_df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize Edicom rows into the internal structure used by the pipeline.
+
+    The function standardizes dates, filters invoice-type rows, derives contract
+    metadata, and computes the IVA percentage field expected later in the workflow.
+
+    Args:
+        raw_edicom_df: Raw Edicom data loaded from the source workbook.
+
+    Returns:
+        A transformed DataFrame ready for integration with metadata and CFDI data.
+    """
     logger.info("Transforming edicom info", extra={"rows": int(raw_edicom_df.shape[0])})
     selected_raw_edicom_cols = get_edicom_normalized_column_names(raw_edicom_df)
     old_edicom_df = raw_edicom_df[selected_raw_edicom_cols]
@@ -189,6 +244,14 @@ def transform_edicom_info(raw_edicom_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def transform_cfdi_info(raw_cfdi_df: pd.DataFrame) -> pd.DataFrame:
+    """Enrich CFDI rows with business-friendly usage labels and column aliases.
+
+    Args:
+        raw_cfdi_df: Raw CFDI data retrieved from the database.
+
+    Returns:
+        A transformed DataFrame with normalized usage and IVA-related columns.
+    """
     logger.info("Transforming cfdi info", extra={"rows": int(raw_cfdi_df.shape[0])})
     transformer_cfdi_df = raw_cfdi_df.copy()
     transformer_cfdi_df["USO CFDI"] = transformer_cfdi_df["CFDI_USE"].map(CFDI_USE_MAP)

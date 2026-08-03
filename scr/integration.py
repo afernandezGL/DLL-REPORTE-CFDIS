@@ -1,3 +1,5 @@
+"""Business-rule integration logic for consolidating source datasets and producing summaries."""
+
 import logging
 import pandas as pd
 import numpy as np
@@ -15,11 +17,17 @@ from scr.models import (
 
 
 def integrate_data(consolidated_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Integrate the consolidated DataFrame with additional data sources if needed.
+    """Apply integration rules and enrich the consolidated DataFrame with status, prefix, and reconciliation fields.
+
+    This function evaluates source comparisons between Edicom, metadata, and CFDI
+    data to derive business status flags, conversion values, and a normalized
+    prefix for each record.
 
     Args:
-        consolidated_dataframe (pd.DataFrame): The consolidated DataFrame to be integrated.
+        consolidated_df: A merged DataFrame containing the preprocessed source rows.
+
+    Returns:
+        A DataFrame enriched with integration outcomes and normalized columns.
     """
     logger.info(
         "Starting integrate_data", extra={"rows": int(consolidated_df.shape[0])}
@@ -283,7 +291,14 @@ def integrate_data(consolidated_df: pd.DataFrame) -> pd.DataFrame:
 def get_summary(
     normalized_df: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    
+    """Build monthly summaries for Edicom, metadata, and CFDI results.
+
+    Args:
+        normalized_df: The consolidated DataFrame produced by the integration stage.
+
+    Returns:
+        Three DataFrames containing summary statistics for Edicom, metadata, and invoice data.
+    """
     edicom_base = normalized_df.groupby(["Periodo", "UUID"], as_index=False).agg(
         EDICOM_TOTAL=("TOTAL_EDICOM_MXN", "first"),
         ESTATUS_EDICOM=("ESTATUS_EDICOM", "first"),
@@ -402,6 +417,19 @@ def join_dfs(
     transformed_metadata_info_df: pd.DataFrame,
     transformed_cfdi_info_df: pd.DataFrame,
 ) -> pd.DataFrame:
+    """Join Edicom, metadata, and CFDI data using a staged matching strategy.
+
+    The function first performs an exact merge, then falls back to tolerance-based
+    matching and UUID-based matching to reconcile records from the different sources.
+
+    Args:
+        transformed_edicom_info_df: Normalized Edicom rows.
+        transformed_metadata_info_df: Normalized metadata rows.
+        transformed_cfdi_info_df: Normalized CFDI rows.
+
+    Returns:
+        A merged DataFrame representing the reconciled dataset.
+    """
     metadata_unique = transformed_metadata_info_df.drop_duplicates(
         subset=["Uuid"], keep="first"
     )

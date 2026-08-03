@@ -1,3 +1,5 @@
+"""Entry point for the CFDI reporting pipeline."""
+
 import pandas as pd
 import logging
 from datetime import datetime
@@ -17,12 +19,17 @@ from scr.transformer import (
     normalize_concepts,
 )
 from scr.integration import integrate_data, get_summary, join_dfs
-from scr.export import export_to_excel, save_log
+from scr.export import export_to_client_format, save_log
 
 logger = logging.getLogger(__name__)
 
 
 def parse_args() -> Namespace:
+    """Parse command-line arguments for the reporting pipeline.
+
+    Returns:
+        A Namespace object containing the validated CLI arguments.
+    """
     parser = argparse.ArgumentParser(
         description="Procesar datos de CFDI, Edicom y Metadata."
     )
@@ -30,7 +37,14 @@ def parse_args() -> Namespace:
         "--date",
         type=str,
         required=True,
-        help="Fecha en formato YYYY-MM para procesar los datos.",
+        help="Fecha en formato YYYY_MM para procesar los datos.",
+    )
+
+    parser.add_argument(
+        "--format",
+        choices=["cliente", "winba"],
+        required=False,
+        default="cliente",
     )
     return parser.parse_args()
 
@@ -38,8 +52,13 @@ def parse_args() -> Namespace:
 def load_data(
     date_: str,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """
-    Load raw data from metadata, Edicom, and CFDI based on the specified date.
+    """Load raw metadata, Edicom, CFDI, and log data for the requested period.
+
+    Args:
+        date_: Period identifier in the YYYY_MM format.
+
+    Returns:
+        A tuple containing the raw metadata, Edicom, CFDI, and Edicom log DataFrames.
     """
     logger.info("Loading raw data for date", extra={"date": date_})
 
@@ -62,16 +81,17 @@ def transform_data(
     transform_edicom_log: pd.DataFrame,
     date_: str,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """
-    Transform the raw data from metadata, Edicom, and CFDI into a final DataFrame.
+    """Transform the raw source datasets into normalized structures for integration.
 
     Args:
-        raw_metadata_info_df (pd.DataFrame): Raw metadata information.
-        raw_edicom_info_df (pd.DataFrame): Raw Edicom information.
-        raw_cfdi_info_df (pd.DataFrame): Raw CFDI information.
+        raw_metadata_info_df: Raw metadata rows loaded from disk.
+        raw_edicom_info_df: Raw Edicom rows loaded from the workbook.
+        raw_cfdi_info_df: Raw CFDI rows retrieved from the database.
+        transform_edicom_log: Historical Edicom log rows for the current year.
+        date_: Period identifier in the YYYY_MM format.
 
     Returns:
-        pd.DataFrame: Transformed final DataFrame.
+        A tuple with the transformed Edicom, metadata, and CFDI DataFrames.
     """
     logger.info("Transforming raw dataframes")
     transformed_edicom_info_df = transform_edicom_info(raw_edicom_info_df)
@@ -105,13 +125,15 @@ def consolidate_info(
     transformed_metadata_info_df: pd.DataFrame,
     transformed_cfdi_info_df: pd.DataFrame,
 ) -> pd.DataFrame:
-    """
-    Consolidate the transformed data from metadata, Edicom, and CFDI into a final DataFrame.
+    """Merge and reconcile the transformed source datasets into a single report-ready DataFrame.
 
     Args:
-        transformed_edicom_info_df (pd.DataFrame): Transformed Edicom information.
-        transformed_metadata_info_df (pd.DataFrame): Transformed metadata information.
-        transformed_cfdi_info_df (pd.DataFrame): Transformed CFDI information.
+        transformed_edicom_info_df: Transformed Edicom rows.
+        transformed_metadata_info_df: Transformed metadata rows.
+        transformed_cfdi_info_df: Transformed CFDI rows.
+
+    Returns:
+        A consolidated DataFrame containing the integrated business view.
     """
     logger.info("Consolidating dataframes")
     consolidated_df = join_dfs(
@@ -128,6 +150,17 @@ def consolidate_info(
 
 
 def validate_args(date_str: str) -> str:
+    """Validate that the supplied period follows the expected YYYY_MM format.
+
+    Args:
+        date_str: The period passed from the command line.
+
+    Returns:
+        The validated period string.
+
+    Raises:
+        ValueError: If the date string is not in the expected format.
+    """
     try:
         datetime.strptime(date_str, "%Y_%m")
     except ValueError:
@@ -137,6 +170,7 @@ def validate_args(date_str: str) -> str:
 
 
 def main():
+    """Execute the full reporting pipeline from data loading to Excel export."""
     args = parse_args()
     date_ = validate_args(args.date)
     logger.info("Pipeline started", extra={"date": date_})
@@ -162,7 +196,15 @@ def main():
 
     edicom_resumen, metadata_resumen, factura_resumen = get_summary(consolidated_df)
 
-    export_to_excel(consolidated_df, edicom_resumen, metadata_resumen, factura_resumen, date_)
+    if args.format == "cliente":
+        export_to_client_format(
+            consolidated_df, edicom_resumen, metadata_resumen, factura_resumen, date_
+        )
+    elif args.format == "winba":
+        # TODO Change this to export_to_winba_format when implemented
+        export_to_client_format(
+            consolidated_df, edicom_resumen, metadata_resumen, factura_resumen, date_
+        )
 
     logger.info("Export completed", extra={"date": date_})
     print("Se creo correctamente el archivo")
