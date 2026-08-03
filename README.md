@@ -42,7 +42,8 @@ Antes de ejecutar el proyecto, asegúrate de tener lo siguiente:
   - data/output/: reportes generados en Excel
   - data/sql/: consultas SQL utilizadas por el pipeline
 - scr/: lógica principal del proyecto
-  - scr/DLL-Pipeline.py: punto de entrada del flujo
+  - scr/report-pipeline.py: punto de entrada del flujo
+  - scr/orchestrator.py: orquestación del pipeline
   - scr/loader.py: carga de datos desde archivos y base de datos
   - scr/transformer.py: normalización y enriquecimiento de campos
   - scr/integration.py: reglas de negocio y consolidación
@@ -108,7 +109,7 @@ La estructura de carpetas debe mantenerse consistente con la lógica del loader.
 Desde la raíz del proyecto, ejecuta:
 
 ```bash
-python scr/DLL-Pipeline.py --date 2026_01
+python scr/report-pipeline.py --date 2026_01 --format cliente
 ```
 
 ### Nota importante sobre la fecha
@@ -137,9 +138,10 @@ El resultado final se exporta en formato Excel y queda listo para revisión.
 CLI (--date)
   |
   v
-scr/DLL-Pipeline.py
+scr/report-pipeline.py
   |
-  +--> scr/loader.py
+  +--> scr/orchestrator.py
+  |      +--> scr/loader.py
   |      +--> archivos locales
   |      +--> consultas SQL
   |      +--> scr/database.py

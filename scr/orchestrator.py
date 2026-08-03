@@ -1,53 +1,17 @@
-"""Entry point for the CFDI reporting pipeline."""
+"""Orchestration helpers for the CFDI reporting pipeline."""
+
+from __future__ import annotations
+
+import logging
 
 import pandas as pd
-import logging
-from datetime import datetime
-from sqlalchemy import create_engine
-import argparse
-from argparse import Namespace
-from scr.loader import (
-    get_edicom_logs,
-    get_cfdi_info,
-    get_metadata_info,
-    get_edicom_info,
-)
-from scr.transformer import (
-    transform_cfdi_info,
-    transform_edicom_info,
-    transform_metadata_info,
-    normalize_concepts,
-)
-from scr.integration import integrate_data, get_summary, join_dfs
+
 from scr.export import export_to_client_format, save_log
+from scr.integration import get_summary, integrate_data, join_dfs
+from scr.loader import get_cfdi_info, get_edicom_info, get_edicom_logs, get_metadata_info
+from scr.transformer import normalize_concepts, transform_cfdi_info, transform_edicom_info, transform_metadata_info
 
 logger = logging.getLogger(__name__)
-
-
-def parse_args() -> Namespace:
-    """Parse command-line arguments for the reporting pipeline.
-
-    Returns:
-        A Namespace object containing the validated CLI arguments.
-    """
-    parser = argparse.ArgumentParser(
-        description="Procesar datos de CFDI, Edicom y Metadata."
-    )
-    parser.add_argument(
-        "--date",
-        type=str,
-        required=True,
-        help="Fecha en formato YYYY_MM para procesar los datos.",
-    )
-
-    parser.add_argument(
-        "--format",
-        choices=["cliente", "winba"],
-        required=False,
-        default="cliente",
-    )
-    return parser.parse_args()
-
 
 def load_data(
     date_: str,
@@ -149,39 +113,22 @@ def consolidate_info(
     return consolidated_df
 
 
-def validate_args(date_str: str) -> str:
-    """Validate that the supplied period follows the expected YYYY_MM format.
+def build_report(date_: str, format_: str) -> bool:
+    """Run the full report pipeline for a single period.
+
+    This function coordinates loading, transformation, consolidation, and summarization
+    into a single entry point that can be reused by the CLI or tests.
 
     Args:
-        date_str: The period passed from the command line.
+        date_: Period identifier in the YYYY_MM format.
+        format_: The output format for the report, either "cliente" or "winba".
 
     Returns:
-        The validated period string.
-
-    Raises:
-        ValueError: If the date string is not in the expected format.
+        True if the report was successfully built and exported, False otherwise.
     """
-    try:
-        datetime.strptime(date_str, "%Y_%m")
-    except ValueError:
-        logger.error("Invalid date format", extra={"date_str": date_str})
-        raise ValueError("La fecha debe estar en formato YYYY-MM.")
-    return date_str
-
-
-def main():
-    """Execute the full reporting pipeline from data loading to Excel export."""
-    args = parse_args()
-    date_ = validate_args(args.date)
-    logger.info("Pipeline started", extra={"date": date_})
-    raw_metadata_info_df, raw_edicom_info_df, raw_cfdi_info_df, transform_edicom_log = (
-        load_data(date_)
-    )
-    (
-        transformed_edicom_info_df,
-        transformed_metadata_info_df,
-        transformed_cfdi_info_df,
-    ) = transform_data(
+    logger.info("Building report", extra={"date": date_})
+    raw_metadata_info_df, raw_edicom_info_df, raw_cfdi_info_df, transform_edicom_log = load_data(date_)
+    transformed_edicom_info_df, transformed_metadata_info_df, transformed_cfdi_info_df = transform_data(
         raw_metadata_info_df,
         raw_edicom_info_df,
         raw_cfdi_info_df,
@@ -193,22 +140,15 @@ def main():
         transformed_metadata_info_df,
         transformed_cfdi_info_df,
     )
-
     edicom_resumen, metadata_resumen, factura_resumen = get_summary(consolidated_df)
 
-    if args.format == "cliente":
+    if format_ == "cliente":
         export_to_client_format(
             consolidated_df, edicom_resumen, metadata_resumen, factura_resumen, date_
         )
-    elif args.format == "winba":
+    elif format_ == "winba":
         # TODO Change this to export_to_winba_format when implemented
         export_to_client_format(
             consolidated_df, edicom_resumen, metadata_resumen, factura_resumen, date_
         )
-
-    logger.info("Export completed", extra={"date": date_})
-    print("Se creo correctamente el archivo")
-
-
-if __name__ == "__main__":
-    main()
+    return True
