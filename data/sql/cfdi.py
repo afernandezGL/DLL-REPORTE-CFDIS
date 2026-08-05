@@ -9,11 +9,6 @@ cfdi_query = """
         CONCEPTO_ID,
         TOTAL_MXN,
         TIPO_ESTATUS
-    FROM DLL.SAT.REPORTE_BASICO_CONCEPTOS_IMPUESTOS   
+    FROM DLL.SAT.REPORTE_BASICO_CONCEPTOS_IMPUESTOS
+        WHERE YEAR(FECHA) = {year}
     """
-
-# cfdi_query = """
-#     SELECT
-#         *
-#     FROM DLL.SAT.REPORTE_BASICO_IMPUESTOS rbi    
-#     """

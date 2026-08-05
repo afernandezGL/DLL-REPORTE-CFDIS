@@ -74,6 +74,12 @@ Activarlo en Windows:
 .venv\Scripts\activate
 ```
 
+Activarlo en Mac:
+
+```bash
+.venv\bin\activate
+```
+
 ### 3. Instalar dependencias
 
 ```bash

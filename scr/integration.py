@@ -189,7 +189,6 @@ def build_conciliation_conditions(consolidated_df: pd.DataFrame) -> tuple[list, 
     ]
     return condiciones, valores
 
-
 def integrate_data(consolidated_df: pd.DataFrame) -> pd.DataFrame:
     """Apply integration rules and enrich the consolidated DataFrame with status, prefix, and reconciliation fields.
 
@@ -296,7 +295,6 @@ def integrate_data(consolidated_df: pd.DataFrame) -> pd.DataFrame:
     )
     return df_sorted
 
-
 def get_summary(
     normalized_df: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
@@ -309,6 +307,7 @@ def get_summary(
         Three DataFrames containing summary statistics for Edicom, metadata, and invoice data.
     """
     edicom_base = normalized_df.groupby(["Periodo", "UUID"], as_index=False).agg(
+        RFC_EMISOR=("RFC_EMISOR", "first"),
         EDICOM_TOTAL=("TOTAL_EDICOM_MXN", "first"),
         ESTATUS_EDICOM=("ESTATUS_EDICOM", "first"),
         METADATA_TOTAL=("TOTAL_METADATA_MXN", "first"),
@@ -318,7 +317,7 @@ def get_summary(
     )
 
     edicom_resumen = (
-        edicom_base.groupby("Periodo")
+        edicom_base.groupby(["Periodo", "RFC_EMISOR"])
         .apply(
             lambda x: pd.Series(
                 {
@@ -341,11 +340,17 @@ def get_summary(
         categories=MONTHS,
         ordered=True
     )
+
+    edicom_resumen = (
+        edicom_resumen
+        .sort_values(["RFC_EMISOR", "Periodo"])
+        .reset_index(drop=True)
+        )
     
-    edicom_resumen = edicom_resumen.sort_values("Periodo").reset_index(drop=True)
+    # edicom_resumen = edicom_resumen.sort_values("Periodo").reset_index(drop=True)
 
     metadata_resumen = (
-        edicom_base.groupby("Periodo")
+        edicom_base.groupby(["Periodo", "RFC_EMISOR"])
         .apply(
             lambda x: pd.Series(
                 {
@@ -368,12 +373,18 @@ def get_summary(
         categories=MONTHS,
         ordered=True
     )
+
+    metadata_resumen = (
+        metadata_resumen
+        .sort_values(["RFC_EMISOR", "Periodo"])
+        .reset_index(drop=True)
+        )
     
-    metadata_resumen = metadata_resumen.sort_values("Periodo").reset_index(drop=True)
+    # metadata_resumen = metadata_resumen.sort_values("Periodo").reset_index(drop=True)
     
 
     factura_resumen = (
-        edicom_base.groupby("Periodo")
+        edicom_base.groupby(["Periodo", "RFC_EMISOR"])
         .apply(
             lambda x: pd.Series(
                 {
@@ -399,7 +410,13 @@ def get_summary(
         ordered=True
     )
 
-    factura_resumen = factura_resumen.sort_values("Periodo").reset_index(drop=True)
+    factura_resumen = (
+        factura_resumen
+        .sort_values(["RFC_EMISOR", "Periodo"])
+        .reset_index(drop=True)
+        )
+
+    # factura_resumen = factura_resumen.sort_values("Periodo").reset_index(drop=True)
 
     for resumen in [edicom_resumen, metadata_resumen, factura_resumen]:
         resumen["TOTAL_VIGENTES"] = (
@@ -418,8 +435,21 @@ def get_summary(
             "TOTAL_CANCELADAS": resumen["TOTAL_CANCELADAS"].sum(),
         }
 
-    return edicom_resumen, metadata_resumen, factura_resumen
+    column_order = [
+        "RFC_EMISOR",
+        "Periodo",
+        "N_FACTURAS_VIGENTES",
+        "TOTAL_VIGENTES",
+        "N_FACTURAS_CANCELADAS",
+        "TOTAL_CANCELADAS",
+    ]
 
+    resumen_dfs = [edicom_resumen, metadata_resumen, factura_resumen]
+
+    for i, df in enumerate(resumen_dfs):
+        resumen_dfs[i] = df[column_order]
+
+    return resumen_dfs[0], resumen_dfs[1], resumen_dfs[2]
 
 def join_dfs(
     transformed_edicom_info_df: pd.DataFrame,
