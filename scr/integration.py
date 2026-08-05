@@ -15,6 +15,180 @@ from scr.models import (
     normalized_metadata_column_names,
 )
 
+def build_prefix_conditions(consolidated_df: pd.DataFrame) -> list:
+    concepto = (
+        consolidated_df["CONCEPTO"].fillna("").astype(str).str.lower().str.strip()
+    )
+
+    contrato = (
+        consolidated_df["CONTRATO"].fillna("").astype(str).str.lower().str.strip()
+    )
+
+    serie = consolidated_df["SERIE"].fillna("").astype(str).str.upper().str.strip()
+
+    iva = (
+        consolidated_df["% DE IVA POR CONCEPTO"]
+        .fillna("")
+        .astype(str)
+        .str.lower()
+        .str.strip()
+    )
+
+    # ==================================
+    # IVA normalizado
+    # ==================================
+
+    iva_16 = iva.isin(["16", "16%", "16.0", "16.00"])
+
+    iva_0 = iva.isin(["0", "0%", "0.0", "0.00"])
+
+    iva_exe = iva.eq("exento")
+
+    interes = concepto.str.contains(r"interes", case=False, na=False)
+
+    # ==================================
+    # Reglas
+    # ==================================
+    condiciones = [
+        # SUBARR
+        contrato.str.contains(r"arrendamiento instalaciones|renta mobiliario", na=False),
+        # REN ANT
+        concepto.str.contains(r"\brenta anticipada\b|\brentas anticipadas\b", regex=True, na=False) & iva_16,
+        # REN ANT 0%
+        concepto.str.contains(r"\brenta anticipada\b|\brentas anticipadas\b", regex=True, na=False)
+        & (iva_0 | iva_exe),
+        # REN
+        (
+            concepto.str.contains(r"\brenta\b", regex=True, na=False)
+            & ~concepto.str.contains(r"\brentas anticipadas\b", regex=True, na=False)
+            & iva_16
+        ),
+        # REN 0%
+        (
+            concepto.str.contains(r"\brenta\b", regex=True, na=False)
+            & ~concepto.str.contains(r"\brentas anticipadas\b", regex=True, na=False)
+            & (iva_0 | iva_exe)
+        ),
+        # DE
+        serie.eq("DE"),
+        # UDI
+        contrato.str.contains(r"\budi\b", regex=True, na=False),
+        # VEN
+        concepto.str.contains(r"\bventa\b", regex=True, na=False) & iva_16,
+        # VEN 0%
+        concepto.str.contains(r"\bventa\b", regex=True, na=False) & (iva_0 | iva_exe),
+        # SEG VIDA
+        concepto.str.contains(
+            r"seguro vida|seguro de vida|prima de seguro vida|prima de seguro de vida",
+            regex=True,
+            na=False,
+        ),
+        # PRI
+        concepto.str.contains(r"prima seguro", na=False),
+        # SUB
+        concepto.str.contains(
+            r"subsidio|comisión mercantil|comision mercantil", regex=True, na=False
+        ),
+        # GAS
+        concepto.str.contains(
+            r"gastos de administración|gastos de administracion", regex=True, na=False
+        ),
+        # OPC
+        concepto.str.contains(r"opción a compra|opcion a compra|opción de compra|opcion de compra", regex=True, na=False),
+        # OSPREY
+        concepto.str.contains(r"osprey", na=False),
+        # SEG
+        concepto.str.contains(r"seguro equipo|seguro resp civil|seguro de equipo", regex=True, na=False),
+        # REEMBOLSO
+        concepto.str.contains(
+            r"reembolso|daños de equipo|danos de equipo", regex=True, na=False
+        ),
+        # ARR
+        concepto.str.contains(r"arrendamiento financiero", na=False),
+        # COM
+        concepto.str.contains(
+            r"comisión por apertura|comision por apertura", regex=True, na=False
+        ),
+        # FACTORAJE
+        contrato.str.contains(r"\bfactoraje\b", regex=True, na=False),
+        # INT MOR
+        concepto.str.contains(
+            r"cargo por adeudo|intereses moratorios", regex=True, na=False
+        ),
+        # INT 16%
+        concepto.str.contains(
+            r"contrato\s*(?:001|002|007|008|009|015|016|018)",
+            regex=True,
+            case=False,
+            na=False,
+        )
+        & iva_16
+        & interes,
+        # INT ARR FIN%
+        concepto.str.contains(
+            r"contrato\s*(?:005|006|035|305|010)", regex=True, case=False, na=False
+        )
+        & iva_16
+        & interes,
+        # INT 0%
+        interes
+        & concepto.str.contains(
+            r"contrato\s*(?:006|009)", regex=True, case=False, na=False
+        )
+        & iva_0
+        & interes,
+        # INT EXE%
+        (
+            (
+                concepto.str.contains(
+                    r"interes plan piso", regex=True, case=False, na=False
+                )
+                | (
+                    interes
+                    & concepto.str.contains(
+                        r"contrato\s*:?\s*(?:001|002|007|015|016|018|033|302|307)",
+                        regex=True,
+                        case=False,
+                        na=False,
+                    )
+                )
+                | concepto.str.contains(r"prepago", regex=True, case=False, na=False)
+            )
+            & iva_exe
+        ),
+        
+    ]
+    return condiciones
+
+def build_conciliation_conditions(consolidated_df: pd.DataFrame) -> tuple[list, list]:
+    condiciones = [
+            consolidated_df["UUID"].notna()
+            & consolidated_df["Uuid"].notna()
+            & consolidated_df["RFC_EMISOR"].notna(),
+            consolidated_df["UUID"].notna()
+            & consolidated_df["Uuid"].notna()
+            & consolidated_df["RFC_EMISOR"].notna()
+            & consolidated_df["TOTAL CONCEPTO"]
+            != consolidated_df["TOTAL_CONCEPTO"],
+            consolidated_df["UUID"].notna()
+            & consolidated_df["Uuid"].notna()
+            & consolidated_df["RFC_EMISOR"].isna(),
+            consolidated_df["UUID"].notna()
+            & consolidated_df["Uuid"].isna()
+            & consolidated_df["RFC_EMISOR"].notna(),
+            consolidated_df["UUID"].notna()
+            & consolidated_df["Uuid"].isna()
+            & consolidated_df["RFC_EMISOR"].isna(),
+        ]
+    valores = [
+        "Conciliado Total",
+        "Conciliado Total con Diferencia",
+        "Conciliado Metadata",
+        "Conciliado Facturas",
+        "Sin Conciliar",
+    ]
+    return condiciones, valores
+
 
 def integrate_data(consolidated_df: pd.DataFrame) -> pd.DataFrame:
     """Apply integration rules and enrich the consolidated DataFrame with status, prefix, and reconciliation fields.
@@ -77,151 +251,11 @@ def integrate_data(consolidated_df: pd.DataFrame) -> pd.DataFrame:
     except Exception as e:
         logger.exception("Error computing TOTAL CONCEPTO MXN", exc_info=e)
         raise
-    concepto = (
-        consolidated_df["CONCEPTO"].fillna("").astype(str).str.lower().str.strip()
-    )
-
-    contrato = (
-        consolidated_df["CONTRATO"].fillna("").astype(str).str.lower().str.strip()
-    )
-
-    serie = consolidated_df["SERIE"].fillna("").astype(str).str.upper().str.strip()
-
-    iva = (
-        consolidated_df["% DE IVA POR CONCEPTO"]
-        .fillna("")
-        .astype(str)
-        .str.lower()
-        .str.strip()
-    )
-
-    # ==================================
-    # IVA normalizado
-    # ==================================
-
-    iva_16 = iva.isin(["16", "16%", "16.0", "16.00"])
-
-    iva_0 = iva.isin(["0", "0%", "0.0", "0.00"])
-
-    iva_exe = iva.eq("exento")
-
-    interes = concepto.str.contains(r"interes", case=False, na=False)
-
-    # ==================================
-    # Reglas
-    # ==================================
-    condiciones = [
-        # REN ANT
-        concepto.str.contains(r"\brenta anticipada\b", regex=True, na=False) & iva_16,
-        # REN ANT 0%
-        concepto.str.contains(r"\brenta anticipada\b", regex=True, na=False)
-        & (iva_0 | iva_exe),
-        # REN
-        (
-            concepto.str.contains(r"\brenta\b", regex=True, na=False)
-            & ~concepto.str.contains(r"\brenta anticipada\b", regex=True, na=False)
-            & iva_16
-        ),
-        # REN 0%
-        (
-            concepto.str.contains(r"\brenta\b", regex=True, na=False)
-            & ~concepto.str.contains(r"\brenta anticipada\b", regex=True, na=False)
-            & (iva_0 | iva_exe)
-        ),
-        # VEN
-        concepto.str.contains(r"\bventa\b", regex=True, na=False) & iva_16,
-        # VEN 0%
-        concepto.str.contains(r"\bventa\b", regex=True, na=False) & (iva_0 | iva_exe),
-        # SEG VIDA
-        concepto.str.contains(
-            r"seguro vida|seguro de vida|prima de seguro vida|prima de seguro de vida",
-            regex=True,
-            na=False,
-        ),
-        # SEG
-        concepto.str.contains(r"seguro equipo|seguro resp civil", regex=True, na=False),
-        # SUB
-        concepto.str.contains(
-            r"subsidio|comisión mercantil|comision mercantil", regex=True, na=False
-        ),
-        # GAS
-        concepto.str.contains(
-            r"gastos de administración|gastos de administracion", regex=True, na=False
-        ),
-        # OPC
-        concepto.str.contains(r"opción a compra|opcion a compra", regex=True, na=False),
-        # OSPREY
-        concepto.str.contains(r"osprey", na=False),
-        # PRI
-        concepto.str.contains(r"prima seguros", na=False),
-        # REEMBOLSO
-        concepto.str.contains(
-            r"reembolso|daños de equipo|danos de equipo", regex=True, na=False
-        ),
-        # ARR
-        concepto.str.contains(r"arrendamiento financiero", na=False),
-        # COM
-        concepto.str.contains(
-            r"comisión por apertura|comision por apertura", regex=True, na=False
-        ),
-        # DE
-        serie.eq("DE"),
-        # FACTORAJE
-        contrato.str.contains(r"\bfactoraje\b", regex=True, na=False),
-        # SUBARR
-        contrato.str.contains(r"arrendamiento instalaciones", na=False),
-        # UDI
-        contrato.str.contains(r"\budi\b", regex=True, na=False),
-        # INT MOR
-        concepto.str.contains(
-            r"cargo por adeudo|intereses moratorios", regex=True, na=False
-        ),
-        # INT 16%
-        concepto.str.contains(
-            r"contrato\s*(?:001|002|007|008|009|015|016|018)",
-            regex=True,
-            case=False,
-            na=False,
-        )
-        & iva_16
-        & interes,
-        # INT ARR FIN%
-        concepto.str.contains(
-            r"contrato\s*(?:005|006|035|305|010)", regex=True, case=False, na=False
-        )
-        & iva_16
-        & interes,
-        # INT 0%
-        interes
-        & concepto.str.contains(
-            r"contrato\s*(?:006|009)", regex=True, case=False, na=False
-        )
-        & iva_0
-        & interes,
-        # INT EXE%
-        (
-            (
-                concepto.str.contains(
-                    r"interes plan piso", regex=True, case=False, na=False
-                )
-                | (
-                    interes
-                    & concepto.str.contains(
-                        r"contrato\s*:?\s*(?:001|002|007|015|016|018|033|302|307)",
-                        regex=True,
-                        case=False,
-                        na=False,
-                    )
-                )
-                | concepto.str.contains(r"prepago", regex=True, case=False, na=False)
-            )
-            & iva_exe
-        ),
-    ]
+    prefix_conditions = build_prefix_conditions(consolidated_df)
     consolidated_df["IVA"] = consolidated_df["IVA"].fillna("-")
 
     try:
-        consolidated_df["PREFIJO"] = np.select(condiciones, prefixes, default="OTH")
+        consolidated_df["PREFIJO"] = np.select(prefix_conditions, prefixes, default="OTH")
         logger.debug(
             "Prefijo assigned",
             extra={"prefixes_used": list(set(consolidated_df["PREFIJO"].tolist()))},
@@ -230,35 +264,10 @@ def integrate_data(consolidated_df: pd.DataFrame) -> pd.DataFrame:
         logger.exception("Error assigning PREFIJO", exc_info=e)
         raise
 
-    condiciones = [
-        consolidated_df["UUID"].notna()
-        & consolidated_df["Uuid"].notna()
-        & consolidated_df["RFC_EMISOR"].notna(),
-        consolidated_df["UUID"].notna()
-        & consolidated_df["Uuid"].notna()
-        & consolidated_df["RFC_EMISOR"].notna()
-        & consolidated_df["TOTAL CONCEPTO"]
-        != consolidated_df["TOTAL_CONCEPTO"],
-        consolidated_df["UUID"].notna()
-        & consolidated_df["Uuid"].notna()
-        & consolidated_df["RFC_EMISOR"].isna(),
-        consolidated_df["UUID"].notna()
-        & consolidated_df["Uuid"].isna()
-        & consolidated_df["RFC_EMISOR"].notna(),
-        consolidated_df["UUID"].notna()
-        & consolidated_df["Uuid"].isna()
-        & consolidated_df["RFC_EMISOR"].isna(),
-    ]
+    conciliation_conditions, conciliation_values = build_conciliation_conditions(consolidated_df)
 
-    valores = [
-        "Conciliado Total",
-        "Conciliado Total con Diferencia",
-        "Conciliado Metadata",
-        "Conciliado Facturas",
-        "Sin Conciliar",
-    ]
 
-    consolidated_df["IDENTIFICADO"] = np.select(condiciones, valores, default="")
+    consolidated_df["IDENTIFICADO"] = np.select(conciliation_conditions, conciliation_values, default="")
 
     # Ensure UUID exists before sort
     if "UUID" in consolidated_df.columns:
