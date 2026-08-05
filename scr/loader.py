@@ -6,6 +6,8 @@ import zipfile
 import logging
 import pandas as pd
 from pathlib import Path
+
+from sqlalchemy import text, text
 from config.config import METADATA_FOLDER_NAME, EDICOM_FOLDER_NAME, EDICOM_LOG_FOLDER_NAME
 from scr.database import close_engine, get_engine
 from scr.models import MONTHS, edicom_log_column_names
@@ -164,10 +166,12 @@ def get_cfdi_info(date_: str) -> pd.DataFrame:
         Exception: If the query execution or connection handling fails.
     """
     engine = None
+    year = int(date_.split("_")[0])
     try:
+        filter_cfdi_query = cfdi_query.format(year=year)
         logger.info("Fetching CFDI info from DB", extra={"date": date_})
         engine = get_engine()
-        cfdi_raw_info_df = pd.read_sql(cfdi_query, engine)
+        cfdi_raw_info_df = pd.read_sql(filter_cfdi_query, engine)
         logger.info("Fetched cfdi dataframe", extra={"rows": int(cfdi_raw_info_df.shape[0])})
     except Exception as e:
         logger.exception("Error durante la extracción de CFDI", exc_info=e)
