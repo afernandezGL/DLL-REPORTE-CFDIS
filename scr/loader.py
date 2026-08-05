@@ -98,7 +98,7 @@ def get_edicom_info(date_) -> pd.DataFrame:
     logger.info("Loaded edicom dataframe", extra={"rows": int(raw_edicom_df.shape[0])})
     return raw_edicom_df
 
-def get_edicom_logs(date_: str) -> pd.DataFrame | None:
+def get_edicom_logs(date_: str) -> pd.DataFrame:
     """Load prior Edicom log files for the same year to build historical context.
 
     For months after January, the function collects the log workbooks from the

@@ -275,7 +275,7 @@ def integrate_data(consolidated_df: pd.DataFrame) -> pd.DataFrame:
             int
         )
         df_sorted = consolidated_df.sort_values(
-            ["PERIODO", "RFC_EMISOR", "UUID", "priority"]
+            ["RFC_EMISOR", "Mes", "Día", "UUID", "priority"]
         ).drop(columns="priority")
     else:
         logger.warning("UUID column not present; skipping sort")

@@ -109,7 +109,7 @@ La estructura de carpetas debe mantenerse consistente con la lógica del loader.
 Desde la raíz del proyecto, ejecuta:
 
 ```bash
-python scr/report-pipeline.py --date 2026_01 --format cliente
+python -m scr.report_pipeline --date 2026_01 --format cliente
 ```
 
 ### Nota importante sobre la fecha
