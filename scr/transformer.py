@@ -38,7 +38,6 @@ def normalize_concepts(wide_df: pd.DataFrame) -> pd.DataFrame:
             r"^(CONCEPTO|CONCEPT1|TOTALCONCEPTO|CLAVEPRODSERVCONCEPTO)\d+$", c
         )
     ]
-
     indxs = sorted(
         {
             int(re.search(r"(\d+)$", c).group(1))
@@ -52,12 +51,11 @@ def normalize_concepts(wide_df: pd.DataFrame) -> pd.DataFrame:
         }
     )
     logger.debug("Found concept indices", extra={"indices": indxs})
-
     long_dfs = []
     try:
         for i in indxs:
             concepto = next(
-                (c for c in (f"CONCEPTO{i}", f"CONCEPT1{i}") if c in wide_df.columns),
+                (c for c in (f"CONCEPTO{i}", f"CONCEPT{i}") if c in wide_df.columns),
                 None,
             )
 
@@ -93,16 +91,38 @@ def normalize_concepts(wide_df: pd.DataFrame) -> pd.DataFrame:
     except Exception as e:
         logger.exception("Error while normalizing concepts", exc_info=e)
         raise
-
     if not long_dfs:
         logger.warning("No concept columns found; returning empty DataFrame")
         return pd.DataFrame()
-
     long_df = pd.concat(long_dfs, ignore_index=True)
     logger.info("Concatenated long dataframe", extra={"rows": int(long_df.shape[0])})
     return long_df
 
-def transform_metadata_info(raw_metadata_df: pd.DataFrame) -> pd.DataFrame:
+def filter_metadata_info(raw_metadata_df: pd.DataFrame, date_: str) -> pd.DataFrame:
+    """Filter metadata rows to include only those relevant to the requested period.
+
+    Args:
+        raw_metadata_df: Raw metadata DataFrame.
+        date_: Period identifier in the YYYY_MM format.
+
+    Returns:
+        A filtered DataFrame containing only rows from the specified year and month.
+    """
+    logger.info("Filtering metadata info", extra={"rows": int(raw_metadata_df.shape[0])})
+    raw_metadata_df = raw_metadata_df.drop_duplicates()
+    raw_metadata_df = raw_metadata_df[raw_metadata_df["EfectoComprobante"] == "I"]
+    year, month = map(int, date_.split("_"))
+    raw_metadata_df["FechaEmision"] = pd.to_datetime(raw_metadata_df["FechaEmision"])
+    filtered_df = raw_metadata_df[
+        (raw_metadata_df["FechaEmision"].dt.year == year)
+        & (raw_metadata_df["FechaEmision"].dt.month <= month)
+    ]
+    logger.info(
+        "Filtered metadata info", extra={"rows": int(filtered_df.shape[0])}
+    )
+    return filtered_df
+
+def transform_metadata_info(raw_metadata_df: pd.DataFrame, date_: str) -> pd.DataFrame:
     """Normalize metadata rows into the format expected by downstream integration logic.
 
     Args:
@@ -112,6 +132,7 @@ def transform_metadata_info(raw_metadata_df: pd.DataFrame) -> pd.DataFrame:
         A transformed DataFrame with standardized dates, period fields, and status values.
     """
     logger.info("Transforming metadata info", extra={"rows": int(raw_metadata_df.shape[0])})
+    # raw_metadata_df = filter_metadata_info(raw_metadata_df, date_)
     selected_raw_metadata_cols = get_metadata_normalized_column_names(raw_metadata_df)
     old_metadata_df = raw_metadata_df[selected_raw_metadata_cols]
     new_metadata_df = old_metadata_df.copy()
@@ -161,7 +182,6 @@ def get_metadata_normalized_column_names(raw_metadata_df: pd.DataFrame) -> list[
         )
     return raw_metadata_column_names
 
-
 def get_edicom_normalized_column_names(raw_edicom_df: pd.DataFrame) -> list[str]:
     """Select and validate the Edicom columns needed for transformation.
 
@@ -176,7 +196,42 @@ def get_edicom_normalized_column_names(raw_edicom_df: pd.DataFrame) -> list[str]
     """
     edicom_colname = list(raw_edicom_df.columns)
     clean_edicom_colname = [n for n in edicom_colname if "Unnamed" not in n]
-    logger.debug("Inspecting edicom columns", extra={"columns": clean_edicom_colname})
+
+    # Buscar la última columna válida CLAVEPRODSERVCONCEPTOX
+    last_clave = next(
+        col
+        for col in reversed(edicom_colname)
+        if (
+            "Unnamed" not in col
+            and col.startswith("CLAVEPRODSERVCONCEPTO")
+        )
+    )
+
+    # Obtener el número X
+    last_num = int(re.search(r"(\d+)$", last_clave).group(1))
+
+    new_columns = []
+    current_num = last_num + 1
+    position_in_group = 0
+
+    for col in edicom_colname:
+
+        if "Unnamed" not in col:
+            new_columns.append(col)
+            continue
+
+        if position_in_group == 0:
+            new_columns.append(f"CONCEPTO{current_num}")
+        elif position_in_group == 1:
+            new_columns.append(f"TOTALCONCEPTO{current_num}")
+        else:
+            new_columns.append(f"CLAVEPRODSERVCONCEPTO{current_num}")
+            current_num += 1
+
+        position_in_group = (position_in_group + 1) % 3
+
+    raw_edicom_df.columns = new_columns
+    # logger.debug("Inspecting edicom columns", extra={"columns": clean_edicom_colname})
 
     if len(normalized_edicom_column_names) != len(raw_edicom_column_names):
         logger.error("Mismatch edicom columns length", extra={"expected": len(raw_edicom_column_names), "actual": len(normalized_edicom_column_names)})
@@ -194,12 +249,11 @@ def get_edicom_normalized_column_names(raw_edicom_df: pd.DataFrame) -> list[str]
 
     selected_raw_edicom_cols = raw_edicom_column_names + [
         c
-        for c in clean_edicom_colname
+        for c in new_columns
         if any(pattern in c for pattern in patterns_raw_edicom_column_names)
     ]
     logger.debug("Selected edicom columns for transformation", extra={"selected": selected_raw_edicom_cols})
     return selected_raw_edicom_cols
-
 
 def transform_edicom_info(raw_edicom_df: pd.DataFrame) -> pd.DataFrame:
     """Normalize Edicom rows into the internal structure used by the pipeline.
@@ -242,8 +296,7 @@ def transform_edicom_info(raw_edicom_df: pd.DataFrame) -> pd.DataFrame:
     logger.debug("Transformed edicom dataframe", extra={"rows": int(new_edicom_df.shape[0])})
     return new_edicom_df
 
-
-def transform_cfdi_info(raw_cfdi_df: pd.DataFrame) -> pd.DataFrame:
+def transform_cfdi_info(raw_cfdi_df: pd.DataFrame, date_: str) -> pd.DataFrame:
     """Enrich CFDI rows with business-friendly usage labels and column aliases.
 
     Args:
@@ -254,6 +307,19 @@ def transform_cfdi_info(raw_cfdi_df: pd.DataFrame) -> pd.DataFrame:
     """
     logger.info("Transforming cfdi info", extra={"rows": int(raw_cfdi_df.shape[0])})
     transformer_cfdi_df = raw_cfdi_df.copy()
+    transformer_cfdi_df = transformer_cfdi_df[transformer_cfdi_df["TIPO_COMPROBANTE"] == "I"]
+    year, month = map(int, date_.split("_"))
+    transformer_cfdi_df["FECHA"] = pd.to_datetime(
+        transformer_cfdi_df["FECHA"]
+    )
+
+    transformer_cfdi_df = transformer_cfdi_df[
+        (transformer_cfdi_df["FECHA"].dt.year == year) &
+        (transformer_cfdi_df["FECHA"].dt.month <= month)
+    ]
     transformer_cfdi_df["USO CFDI"] = transformer_cfdi_df["CFDI_USE"].map(CFDI_USE_MAP)
+    transformer_cfdi_df["FECHA_PERIODO"] = (
+        transformer_cfdi_df["FECHA"].dt.month.map(MONTH_MAP)
+    )
     transformer_cfdi_df = transformer_cfdi_df.rename(columns={"CONCEPTO_IVA":"% DE IVA POR CONCEPTO"})
     return transformer_cfdi_df

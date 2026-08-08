@@ -153,7 +153,7 @@ def get_edicom_logs(date_: str) -> pd.DataFrame:
     
     return raw_edicom_df
 
-def get_cfdi_info(date_: str) -> pd.DataFrame:
+def get_cfdi_info(date_: str, rfc_emisor_list: list) -> pd.DataFrame:
     """Fetch raw CFDI rows from the configured database for the requested period.
 
     Args:
@@ -168,7 +168,7 @@ def get_cfdi_info(date_: str) -> pd.DataFrame:
     engine = None
     year = int(date_.split("_")[0])
     try:
-        filter_cfdi_query = cfdi_query.format(year=year)
+        filter_cfdi_query = cfdi_query.format(year=year, rfc_emisor_list=", ".join(f"'{rfc}'" for rfc in rfc_emisor_list))
         logger.info("Fetching CFDI info from DB", extra={"date": date_})
         engine = get_engine()
         cfdi_raw_info_df = pd.read_sql(filter_cfdi_query, engine)
