@@ -6,10 +6,10 @@ import logging
 
 import pandas as pd
 
-from scr.export import export_to_client_format, save_log
-from scr.integration import get_summary, integrate_data, join_dfs
+from scr.export import export_to_client_format, save_log, export_to_winba_format
+from scr.integration import get_differences, get_summary, integrate_data, join_dfs
 from scr.loader import get_cfdi_info, get_edicom_info, get_edicom_logs, get_metadata_info
-from scr.transformer import normalize_concepts, transform_cfdi_info, transform_edicom_info, transform_metadata_info
+from scr.transformer import filter_metadata_info, normalize_concepts, transform_cfdi_info, transform_edicom_info, transform_metadata_info
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,8 @@ def load_data(
 
     raw_metadata_info_df = get_metadata_info(date_)
     raw_edicom_info_df = get_edicom_info(date_)
-    raw_cfdi_info_df = get_cfdi_info(date_)
+    rfc_emisor_list = raw_metadata_info_df['RfcEmisor'].dropna().unique().tolist()
+    raw_cfdi_info_df = get_cfdi_info(date_, rfc_emisor_list)
     transform_edicom_log = get_edicom_logs(date_)
     return (
         raw_metadata_info_df,
@@ -44,7 +45,7 @@ def transform_data(
     raw_cfdi_info_df: pd.DataFrame,
     transform_edicom_log: pd.DataFrame,
     date_: str,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Transform the raw source datasets into normalized structures for integration.
 
     Args:
@@ -55,7 +56,7 @@ def transform_data(
         date_: Period identifier in the YYYY_MM format.
 
     Returns:
-        A tuple with the transformed Edicom, metadata, and CFDI DataFrames.
+        A tuple with the filtered metadata, transformed Edicom, transformed metadata, and transformed CFDI DataFrames.
     """
     logger.info("Transforming raw dataframes")
     transformed_edicom_info_df = transform_edicom_info(raw_edicom_info_df)
@@ -67,8 +68,13 @@ def transform_data(
     year_transformed_edicom_info_df = pd.concat(
         [transform_edicom_log, normalize_transformed_edicom_info_df], ignore_index=True
     )
-    transformed_metadata_info_df = transform_metadata_info(raw_metadata_info_df)
-    transformed_cfdi_info_df = transform_cfdi_info(raw_cfdi_info_df)
+    filtered_metadata_info_df = filter_metadata_info(raw_metadata_info_df, date_)
+    transformed_metadata_info_df = transform_metadata_info(filtered_metadata_info_df, date_)
+    filtered_metadata_info_df = filtered_metadata_info_df.sort_values(
+        by=["RfcEmisor", "FechaEmision"],
+        ascending=[True, True]
+    )
+    transformed_cfdi_info_df = transform_cfdi_info(raw_cfdi_info_df, date_)
     logger.info(
         "Transformation completed",
         extra={
@@ -78,6 +84,7 @@ def transform_data(
         },
     )
     return (
+        filtered_metadata_info_df,
         year_transformed_edicom_info_df,
         transformed_metadata_info_df,
         transformed_cfdi_info_df,
@@ -128,7 +135,7 @@ def build_report(date_: str, format_: str) -> bool:
     """
     logger.info("Building report", extra={"date": date_})
     raw_metadata_info_df, raw_edicom_info_df, raw_cfdi_info_df, transform_edicom_log = load_data(date_)
-    transformed_edicom_info_df, transformed_metadata_info_df, transformed_cfdi_info_df = transform_data(
+    filtered_metadata_info_df, transformed_edicom_info_df, transformed_metadata_info_df, transformed_cfdi_info_df = transform_data(
         raw_metadata_info_df,
         raw_edicom_info_df,
         raw_cfdi_info_df,
@@ -140,15 +147,14 @@ def build_report(date_: str, format_: str) -> bool:
         transformed_metadata_info_df,
         transformed_cfdi_info_df,
     )
-    edicom_resumen, metadata_resumen, factura_resumen = get_summary(consolidated_df)
-
+    edicom_resumen, metadata_resumen, factura_resumen = get_summary(consolidated_df, transformed_metadata_info_df, transformed_cfdi_info_df)
+    uuid_differences = get_differences(consolidated_df, transformed_metadata_info_df, transformed_cfdi_info_df)
     if format_ == "cliente":
         export_to_client_format(
-            consolidated_df, edicom_resumen, metadata_resumen, factura_resumen, date_
+            consolidated_df, edicom_resumen, metadata_resumen, factura_resumen, uuid_differences, date_
         )
     elif format_ == "winba":
-        # TODO Change this to export_to_winba_format when implemented
-        export_to_client_format(
-            consolidated_df, edicom_resumen, metadata_resumen, factura_resumen, date_
+        export_to_winba_format(
+            consolidated_df, filtered_metadata_info_df, edicom_resumen, metadata_resumen, factura_resumen, uuid_differences, date_
         )
     return True
