@@ -295,6 +295,18 @@ def integrate_data(consolidated_df: pd.DataFrame) -> pd.DataFrame:
     )
     return df_sorted
 
+def get_subtotal_differences(consolidated_df: pd.DataFrame) -> pd.DataFrame:
+    """Identify rows where the subtotal values differ between Edicom and metadata sources.
+
+    Args:
+        consolidated_df: The integrated DataFrame containing both Edicom and metadata data.
+        """
+    return consolidated_df[
+        (consolidated_df["SUBTOTAL"].notna()) &
+        (consolidated_df["SUBTOTAL_FACTURA"].notna()) &
+        (abs(consolidated_df["SUBTOTAL"] - consolidated_df["SUBTOTAL_FACTURA"]) > 1)
+    ]
+
 def get_summary(
     normalized_df: pd.DataFrame,
     transformed_metadata_info_df: pd.DataFrame,
@@ -502,7 +514,7 @@ def get_differences(
     consolidated_df: pd.DataFrame,
     transformed_metadata_info_df: pd.DataFrame,
     transformed_cfdi_info_df: pd.DataFrame,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, list[str], list[str], list[str]]:
     """Identify differences between the consolidated DataFrame and the source datasets.
 
     Args:
@@ -511,7 +523,8 @@ def get_differences(
         transformed_cfdi_info_df: Transformed CFDI rows.
 
     Returns:
-        A DataFrame highlighting the differences.
+        A tuple of DataFrames highlighting the differences:
+        (differences, edicom_df, metadata_df, facturas_df)
     """
     cfdis_uuids = set(transformed_cfdi_info_df["UUID"].dropna())
     edicom_uuids = set(consolidated_df["UUID"].dropna())
@@ -569,7 +582,21 @@ def get_differences(
     ].sort_values(
         ["TIPO", "UUID"]
     )
-    return differences
+    facturas_list = differences.loc[
+    differences["FACTURAS"],
+    "UUID"
+    ].tolist()
+
+    edicom_list = differences.loc[
+        differences["EDICOM"],
+        "UUID"
+    ].tolist()
+
+    metadata_list = differences.loc[
+        differences["METADATA"],
+        "UUID"
+    ].tolist()
+    return differences, edicom_list, metadata_list, facturas_list
 
 
 
@@ -731,7 +758,6 @@ def join_dfs(
         how="inner",
         suffixes=("_left", "_right"),
     )
-
     print(f"Matches solo UUID: {len(uuid_only_matches)}")
 
     # No conciliados definitivos

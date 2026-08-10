@@ -7,11 +7,30 @@ import logging
 import pandas as pd
 
 from scr.export import export_to_client_format, save_log, export_to_winba_format
-from scr.integration import get_differences, get_summary, integrate_data, join_dfs
-from scr.loader import get_cfdi_info, get_edicom_info, get_edicom_logs, get_metadata_info
-from scr.transformer import filter_metadata_info, normalize_concepts, transform_cfdi_info, transform_edicom_info, transform_metadata_info
+from scr.integration import (
+    get_differences,
+    get_subtotal_differences,
+    get_summary,
+    integrate_data,
+    join_dfs,
+)
+from scr.loader import (
+    get_cfdi_info,
+    get_edicom_info,
+    get_edicom_logs,
+    get_full_cfdi_info,
+    get_metadata_info,
+)
+from scr.transformer import (
+    filter_metadata_info,
+    normalize_concepts,
+    transform_cfdi_info,
+    transform_edicom_info,
+    transform_metadata_info,
+)
 
 logger = logging.getLogger(__name__)
+
 
 def load_data(
     date_: str,
@@ -28,7 +47,7 @@ def load_data(
 
     raw_metadata_info_df = get_metadata_info(date_)
     raw_edicom_info_df = get_edicom_info(date_)
-    rfc_emisor_list = raw_metadata_info_df['RfcEmisor'].dropna().unique().tolist()
+    rfc_emisor_list = raw_metadata_info_df["RfcEmisor"].dropna().unique().tolist()
     raw_cfdi_info_df = get_cfdi_info(date_, rfc_emisor_list)
     transform_edicom_log = get_edicom_logs(date_)
     return (
@@ -69,10 +88,11 @@ def transform_data(
         [transform_edicom_log, normalize_transformed_edicom_info_df], ignore_index=True
     )
     filtered_metadata_info_df = filter_metadata_info(raw_metadata_info_df, date_)
-    transformed_metadata_info_df = transform_metadata_info(filtered_metadata_info_df, date_)
+    transformed_metadata_info_df = transform_metadata_info(
+        filtered_metadata_info_df, date_
+    )
     filtered_metadata_info_df = filtered_metadata_info_df.sort_values(
-        by=["RfcEmisor", "FechaEmision"],
-        ascending=[True, True]
+        by=["RfcEmisor", "FechaEmision"], ascending=[True, True]
     )
     transformed_cfdi_info_df = transform_cfdi_info(raw_cfdi_info_df, date_)
     logger.info(
@@ -95,7 +115,7 @@ def consolidate_info(
     transformed_edicom_info_df: pd.DataFrame,
     transformed_metadata_info_df: pd.DataFrame,
     transformed_cfdi_info_df: pd.DataFrame,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Merge and reconcile the transformed source datasets into a single report-ready DataFrame.
 
     Args:
@@ -114,10 +134,52 @@ def consolidate_info(
     )
 
     consolidated_df = integrate_data(consolidated_df)
+    subtotal_differences = get_subtotal_differences(consolidated_df)
     logger.info(
-        "Consolidation completed", extra={"rows": int(consolidated_df.shape[0])}
+        "Consolidation completed",
+        extra={
+            "rows": int(consolidated_df.shape[0]),
+            "subtotal_differences": int(subtotal_differences.shape[0]),
+        },
     )
-    return consolidated_df
+    return consolidated_df, subtotal_differences
+
+
+def reload_differences(
+    edicom_differences: list[str],
+    metadata_differences: list[str],
+    facturas_differences: list[str],
+    consolidated_df: pd.DataFrame,
+    raw_metadata_info_df: pd.DataFrame,
+    date_: str,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Reload the differences DataFrames based on the provided UUID lists."""
+    filtered_metadata_info_df = filter_metadata_info(raw_metadata_info_df, date_)
+    metadata_differences_df = filtered_metadata_info_df[
+        filtered_metadata_info_df["Uuid"].isin(metadata_differences)
+    ]
+    edicom_differences_df = consolidated_df[
+        consolidated_df["UUID"].isin(edicom_differences)
+    ]
+    raw_full_cfdi_info_df = get_full_cfdi_info(
+        date_,
+        rfc_emisor_list=consolidated_df["RFC_EMISOR"].dropna().unique().tolist(),
+        uuid_list=facturas_differences,
+    )
+    facturas_differences_df = raw_full_cfdi_info_df[
+        raw_full_cfdi_info_df["UUID"].isin(facturas_differences)
+    ]
+    sorted_metadata_differences_df = metadata_differences_df.sort_values(
+        by=["RfcEmisor", "FechaEmision"], ascending=[True, True]
+    )
+    sorted_facturas_differences_df = facturas_differences_df.sort_values(
+        by=["RFC_EMISOR", "FECHA"], ascending=[True, True]
+    )
+    return (
+        edicom_differences_df,
+        sorted_metadata_differences_df,
+        sorted_facturas_differences_df,
+    )
 
 
 def build_report(date_: str, format_: str) -> bool:
@@ -134,27 +196,69 @@ def build_report(date_: str, format_: str) -> bool:
         True if the report was successfully built and exported, False otherwise.
     """
     logger.info("Building report", extra={"date": date_})
-    raw_metadata_info_df, raw_edicom_info_df, raw_cfdi_info_df, transform_edicom_log = load_data(date_)
-    filtered_metadata_info_df, transformed_edicom_info_df, transformed_metadata_info_df, transformed_cfdi_info_df = transform_data(
+    raw_metadata_info_df, raw_edicom_info_df, raw_cfdi_info_df, transform_edicom_log = (
+        load_data(date_)
+    )
+    (
+        filtered_metadata_info_df,
+        transformed_edicom_info_df,
+        transformed_metadata_info_df,
+        transformed_cfdi_info_df,
+    ) = transform_data(
         raw_metadata_info_df,
         raw_edicom_info_df,
         raw_cfdi_info_df,
         transform_edicom_log,
         date_,
     )
-    consolidated_df = consolidate_info(
+    consolidated_df, subtotal_differences = consolidate_info(
         transformed_edicom_info_df,
         transformed_metadata_info_df,
         transformed_cfdi_info_df,
     )
-    edicom_resumen, metadata_resumen, factura_resumen = get_summary(consolidated_df, transformed_metadata_info_df, transformed_cfdi_info_df)
-    uuid_differences = get_differences(consolidated_df, transformed_metadata_info_df, transformed_cfdi_info_df)
+    edicom_resumen, metadata_resumen, factura_resumen = get_summary(
+        consolidated_df, transformed_metadata_info_df, transformed_cfdi_info_df
+    )
+    differences, edicom_differences, metadata_differences, facturas_differences = (
+        get_differences(
+            consolidated_df, transformed_metadata_info_df, transformed_cfdi_info_df
+        )
+    )
+    edicom_differences_df, metadata_differences_df, facturas_differences_df = (
+        reload_differences(
+            edicom_differences,
+            metadata_differences,
+            facturas_differences,
+            consolidated_df,
+            raw_metadata_info_df,
+            date_,
+        )
+    )
     if format_ == "cliente":
         export_to_client_format(
-            consolidated_df, edicom_resumen, metadata_resumen, factura_resumen, uuid_differences, date_
+            consolidated_df,
+            edicom_resumen,
+            metadata_resumen,
+            factura_resumen,
+            differences,
+            edicom_differences_df,
+            metadata_differences_df,
+            facturas_differences_df,
+            subtotal_differences,
+            date_,
         )
     elif format_ == "winba":
         export_to_winba_format(
-            consolidated_df, filtered_metadata_info_df, edicom_resumen, metadata_resumen, factura_resumen, uuid_differences, date_
+            consolidated_df,
+            filtered_metadata_info_df,
+            edicom_resumen,
+            metadata_resumen,
+            factura_resumen,
+            differences,
+            edicom_differences_df,
+            metadata_differences_df,
+            facturas_differences_df,
+            subtotal_differences,
+            date_,
         )
     return True
