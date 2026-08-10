@@ -11,7 +11,7 @@ from sqlalchemy import text, text
 from config.config import METADATA_FOLDER_NAME, EDICOM_FOLDER_NAME, EDICOM_LOG_FOLDER_NAME
 from scr.database import close_engine, get_engine
 from scr.models import MONTHS, edicom_log_column_names
-from data.sql.cfdi import cfdi_query
+from data.sql.cfdi import cfdi_query, full_cfdi_query
 import csv
 
 logger = logging.getLogger(__name__)
@@ -169,6 +169,35 @@ def get_cfdi_info(date_: str, rfc_emisor_list: list) -> pd.DataFrame:
     year = int(date_.split("_")[0])
     try:
         filter_cfdi_query = cfdi_query.format(year=year, rfc_emisor_list=", ".join(f"'{rfc}'" for rfc in rfc_emisor_list))
+        logger.info("Fetching CFDI info from DB", extra={"date": date_})
+        engine = get_engine()
+        cfdi_raw_info_df = pd.read_sql(filter_cfdi_query, engine)
+        logger.info("Fetched cfdi dataframe", extra={"rows": int(cfdi_raw_info_df.shape[0])})
+    except Exception as e:
+        logger.exception("Error durante la extracción de CFDI", exc_info=e)
+        raise
+    finally:
+        if engine:
+            close_engine(engine)
+    return cfdi_raw_info_df
+
+def get_full_cfdi_info(date_: str, rfc_emisor_list: list, uuid_list: list) -> pd.DataFrame:
+    """Fetch raw CFDI rows from the configured database for the requested period.
+
+    Args:
+        date_: Period identifier in the YYYY_MM format.
+        uuid_list: List of UUIDs to filter the CFDI records.
+
+    Returns:
+        A DataFrame containing the raw CFDI rows retrieved from the database.
+
+    Raises:
+        Exception: If the query execution or connection handling fails.
+    """
+    engine = None
+    year = int(date_.split("_")[0])
+    try:
+        filter_cfdi_query = full_cfdi_query.format(year=year, rfc_emisor_list=", ".join(f"'{rfc}'" for rfc in rfc_emisor_list), uuid_list=", ".join(f"'{uuid}'" for uuid in uuid_list))
         logger.info("Fetching CFDI info from DB", extra={"date": date_})
         engine = get_engine()
         cfdi_raw_info_df = pd.read_sql(filter_cfdi_query, engine)

@@ -252,6 +252,5 @@ columns_to_export = [
         "% DE IVA",
         "% DE IVA POR CONCEPTO",
         "USO CFDI",
-        "Contrato MID",
-        "CONCEPTO_ID",
+        "Contrato MID"
     ]
