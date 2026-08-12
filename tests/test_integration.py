@@ -1,10 +1,10 @@
 import logging
 
-import numpy as np
 import pandas as pd
 import pytest
 
-from scr.integration import integrate_data, normalize_concepts
+from scr.integration import integrate_data
+from scr.transformer import normalize_concepts
 
 
 def build_row(
@@ -23,18 +23,29 @@ def build_row(
 ):
     row = {
         "UUID": "u1",
+        "Uuid": "u1",
+        "RFC_EMISOR": "RFC001",
+        "RECEPTOR NOMBRE": "Cliente",
         "ESTATUS_EDICOM": estatus_edicom,
         "ESTATUS_METADATA": estatus_metadata,
         "MONEDA": moneda,
-        "DETERMINACION_TC": determinacion_tc,
+        "TIPO_CAMBIO": determinacion_tc,
         "% DE IVA POR CONCEPTO": iva,
         "IVA": 10,
+        "TOTAL": 100,
+        "SUBTOTAL": 90,
         "CONTRATO": contrato,
         "SERIE": serie,
         "OBSERVACIONES": observaciones,
+        "CONCEPTO": concepto,
+        "TOTAL CONCEPTO": total_concepto,
+        "TOTAL_CONCEPTO": total_concepto,
+        "CÓDIGO PRODUCTO": codigo_producto,
         concepto_column: concepto,
         "TOTALCONCEPTO1": total_concepto,
         "CLAVEPRODSERVCONCEPTO1": codigo_producto,
+        "Mes": 1,
+        "Día": 1,
     }
     return pd.DataFrame([row])
 
@@ -93,8 +104,8 @@ def test_concept1_alternative_column_name_is_supported():
         "SERIE": "",
         "OBSERVACIONES": "nota",
         "CONCEPT11": "venta industrial",
-        "TOTALCONCEPTO1": 150,
-        "CLAVEPRODSERVCONCEPTO1": "02020202",
+        "TOTALCONCEPTO11": 150,
+        "CLAVEPRODSERVCONCEPTO11": "02020202",
     }
     normalized = normalize_concepts(pd.DataFrame([row]))
     assert normalized.shape[0] == 1
@@ -115,7 +126,7 @@ def test_integration_handles_blank_concept_and_missing_optional_fields():
     df = build_row(concepto="", iva="16%", serie="", contrato="", observaciones="")
     result = integrate_data(df)
     assert result["PREFIJO"].iloc[0] == "OTH"
-    assert result["Tipo de cambio"].iloc[0] == 1
+    assert result["Tipo de cambio"].iloc[0] == 20
 
 
 def test_total_concept_mxn_remains_zero_given_rename_logic():
@@ -140,7 +151,9 @@ def test_integrate_data_raises_key_error_when_required_columns_missing(default_r
         integrate_data(df)
 
 
-def test_integrate_data_logs_error_when_status_metadata_column_missing(default_row, caplog):
+def test_integrate_data_logs_error_when_status_metadata_column_missing(
+    default_row, caplog
+):
     """Check current behavior when ESTATUS_METADATA is missing: error is logged and exception is raised."""
     caplog.set_level(logging.ERROR)
     df = default_row.drop(columns=["ESTATUS_METADATA"])

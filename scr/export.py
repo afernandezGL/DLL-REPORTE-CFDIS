@@ -47,6 +47,19 @@ def setup_resumen_header(
     year: str,
     month: str,
 ):
+    """Populate the summary header block for a worksheet.
+
+    Args:
+        ws: Active worksheet receiving the report header.
+        section: Section label to place in the worksheet header.
+        company_name: Company name displayed in the report header.
+        report_title: Report title displayed under the company name.
+        year: Year used in the generated period text.
+        month: Month value used to render the full period label.
+
+    Returns:
+        The row number where the summary content should begin.
+    """
     ws["A2"] = section
     ws["A2"].font = Font(
         bold=True,
@@ -88,6 +101,14 @@ def add_metadata_detail_table(
     title_row: int = 8,
     title: str = "DETALLE METADATA",
 ):
+    """Insert a metadata detail table with the expected report styling.
+
+    Args:
+        ws: Worksheet that will receive the metadata detail section.
+        metadata_df: DataFrame containing the metadata rows to write.
+        title_row: Row where the section title is written.
+        title: Title displayed for the detail block.
+    """
     subtitle_row = title_row + 1
     header_row = subtitle_row + 1
 
@@ -166,6 +187,14 @@ def add_edicom_detail_table(
     title_row: int = 8,
     title: str = "EDICOM",
 ):
+    """Insert an Edicom detail table with the expected report styling.
+
+    Args:
+        ws: Worksheet that will receive the Edicom detail section.
+        edicom_df: DataFrame containing the Edicom rows to write.
+        title_row: Row where the section title is written.
+        title: Title displayed for the detail block.
+    """
     subtitle_row = title_row + 1
     header_row = subtitle_row + 1
 
@@ -244,6 +273,14 @@ def add_cfdi_detail_table(
     title_row: int = 8,
     title: str = "DETALLE CFDI",
 ):
+    """Insert a CFDI detail table with the expected report styling.
+
+    Args:
+        ws: Worksheet that will receive the CFDI detail section.
+        cfdi_df: DataFrame containing the CFDI rows to write.
+        title_row: Row where the section title is written.
+        title: Title displayed for the detail block.
+    """
     subtitle_row = title_row + 1
     header_row = subtitle_row + 1
 
@@ -324,6 +361,16 @@ def add_consolidated_detail_table(
     title_row: int = 8,
     title: str = "CONSOLIDADO",
 ):
+    """Write the consolidated report table with grouped column styling.
+
+    Args:
+        cols_present: Columns from the export schema that are available in the
+            consolidated dataframe.
+        ws: Worksheet to receive the aggregated table.
+        consolidated_df: DataFrame containing the final consolidated rows.
+        title_row: Row where the title is placed.
+        title: Title displayed above the consolidated section.
+    """
     subtitle_row = title_row + 1
     header_row = subtitle_row + 1
 
@@ -381,10 +428,6 @@ def add_consolidated_detail_table(
             # Preparar siguiente grupo
             current_group = group
             start_col = idx
-
-    # ==========================================
-    # Último grupo
-    # ==========================================
 
     end_col = len(columns_to_export)
 
@@ -481,6 +524,14 @@ def add_subtotal_differences_detail_table(
     title_row: int = 8,
     title: str = "DIFERENCIAS POR SUBTOTALES",
 ):
+    """Insert the subtotal comparison table with group coloring by field type.
+
+    Args:
+        ws: Worksheet that will receive the subtotal comparison section.
+        subtotal_differences_df: DataFrame containing subtotal delta rows.
+        title_row: Row where the section title is written.
+        title: Title shown above the subtotal comparison block.
+    """
     total_cols = len(subtotal_differences_df.columns)
 
     # ======================
@@ -581,9 +632,6 @@ def add_subtotal_differences_detail_table(
         wrap_text=True,
     )
 
-    # ======================
-    # ENCABEZADOS
-    # ======================
     header_row = subtitle_row + 1
 
     for col_idx, real_col in enumerate(
@@ -614,9 +662,7 @@ def add_subtotal_differences_detail_table(
             bold=True,
             color=WHITE if color in (BLUE_BRIGHT, RED_BRIGHT, GREY) else BLACK,
         )
-    # ======================
-    # DATOS
-    # ======================
+
     for row_idx, (_, row) in enumerate(
         subtotal_differences_df.iterrows(),
         start=header_row + 1,
@@ -1175,6 +1221,14 @@ def add_differences_table(
     title_row: int = 0,
     title: str = "DIFERENCIAS DE UUID",
 ):
+    """Render the UUID comparison table used in the differences sheet.
+
+    Args:
+        ws_diferencias: Worksheet that will receive the differences table.
+        uuid_differences: DataFrame with UUID coverage comparisons.
+        title_row: Row where the table title is written.
+        title: Heading used for the UUID differences block.
+    """
     subtitle_row = title_row + 1
     header_row = subtitle_row + 1
 
@@ -1229,6 +1283,15 @@ def add_differences_table(
 
 
 def save_file(wb: Workbook, date_: str) -> bool:
+    """Persist the workbook to the output folder for the requested period.
+
+    Args:
+        wb: Workbook instance to save.
+        date_: Period identifier used to build the output path.
+
+    Returns:
+        True when the workbook is written successfully; otherwise False.
+    """
     try:
         output_dir = OUTPUT_FOLDER / date_
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -1361,6 +1424,18 @@ def add_winba_resumen_block(ws, current_row, title, df, color):
 
 
 def add_client_resume_block(ws, current_row, title, df, color):
+    """Render a summary block for the client-oriented worksheet layout.
+
+    Args:
+        ws: Worksheet that receives the summary block.
+        current_row: Row where the block title should be placed.
+        title: Title displayed above the block.
+        df: DataFrame containing the data to write below the title.
+        color: Background color for the title and headers.
+
+    Returns:
+        The next row after the rendered block.
+    """
     title_row = current_row
     header_row = current_row + 1
 
@@ -1391,6 +1466,11 @@ def add_client_resume_block(ws, current_row, title, df, color):
 
 
 def apply_number_format_table(ws_resumen):
+    """Apply numeric formatting to the summary table in a worksheet.
+
+    Args:
+        ws_resumen: Worksheet whose numeric columns will be formatted.
+    """
     # Format numeric columns
     for row in ws_resumen.iter_rows(min_row=1):
         for cell in row:
@@ -1400,6 +1480,12 @@ def apply_number_format_table(ws_resumen):
 
 
 def autofit_columns(ws, ignore_columns=None):
+    """Adjust each column width to fit the longest value in the worksheet.
+
+    Args:
+        ws: Worksheet whose columns need width adjustment.
+        ignore_columns: Optional list of Excel column letters to skip.
+    """
     for column in ws.columns:
         max_length = 0
         column_letter = get_column_letter(column[0].column)

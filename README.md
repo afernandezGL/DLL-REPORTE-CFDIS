@@ -14,6 +14,7 @@ El flujo está diseñado para:
 - normalizar y transformar los datos a un formato consistente,
 - aplicar reglas de negocio para enriquecer la información,
 - consolidar los datasets en un único DataFrame,
+- identificar diferencias por UUID y subtotal entre las fuentes,
 - exportar el resultado a Excel para su revisión.
 
 En términos de arquitectura, el proyecto sigue un patrón ETL simple:
@@ -38,19 +39,19 @@ Antes de ejecutar el proyecto, asegúrate de tener lo siguiente:
 - config/: configuración y variables de entorno
 - data/: datos de entrada y salida
   - data/metadata/: archivos de metadata esperados por el loader
-  - data/edicom/: archivos fuente de Edicom
+  - data/edicom/: archivos fuente de Edicom y logs históricos
   - data/output/: reportes generados en Excel
   - data/sql/: consultas SQL utilizadas por el pipeline
 - scr/: lógica principal del proyecto
-  - scr/report-pipeline.py: punto de entrada del flujo
+  - scr/report_pipeline.py: punto de entrada del flujo
   - scr/orchestrator.py: orquestación del pipeline
   - scr/loader.py: carga de datos desde archivos y base de datos
   - scr/transformer.py: normalización y enriquecimiento de campos
-  - scr/integration.py: reglas de negocio y consolidación
-  - scr/export.py: exportación a Excel
+  - scr/integration.py: reglas de negocio, conciliación y diferencias
+  - scr/export.py: exportación a Excel y logs de Edicom
   - scr/database.py: configuración del engine SQLAlchemy
   - scr/models.py: mappings, columnas compartidas y reglas de prefijos
-  - scr/styles.py: estilos visuales para los reportes
+  - scr/stryles.py: estilos visuales para los reportes
 - tests/: pruebas automatizadas para la lógica de integración y transformación
 
 ## Instalación paso a paso
@@ -96,19 +97,21 @@ DB_DATABASE=<nombre de la base de datos>
 DB_USER=<usuario>
 DB_PASSWORD=<contraseña>
 DB_PORT=<puerto>
+EDICOM_PASSWORD=<contraseña del archivo XLSX de Edicom, si aplica>
 ```
 
-Estas variables son necesarias para que las consultas SQL funcionen correctamente. Además, es obligatorio que exista una conexión accesible a la base de datos configurada desde el entorno donde se ejecuta el proyecto.
+Estas variables son necesarias para que las consultas SQL funcionen correctamente. `EDICOM_PASSWORD` solo se utiliza cuando el archivo XLSX de Edicom está cifrado. Además, es obligatorio que exista una conexión accesible a la base de datos configurada desde el entorno donde se ejecuta el proyecto.
 
 ## Preparación de datos de entrada
 
 Antes de ejecutar el pipeline, asegúrate de dejar los datos en las rutas esperadas:
 
-- data/metadata/<periodo>/: archivos que el loader pueda procesar
-- data/edicom/<periodo>/: archivos fuente de Edicom
+- data/metadata/<periodo>/: uno o dos archivos ZIP con archivos CSV o TXT separados por `~`
+- data/edicom/<periodo>/: un único archivo fuente XLSX de Edicom
+- data/edicom/logs/<año>/: archivos XLSX de log de los meses anteriores cuando el periodo no sea enero
 - data/sql/: consultas SQL definidas para CFDI
 
-La estructura de carpetas debe mantenerse consistente con la lógica del loader.
+La estructura de carpetas debe mantenerse consistente con la lógica del loader. Los logs se generan con nombres como `Log_Enero.xlsx` y se reutilizan como contexto histórico.
 
 ## Ejecución del pipeline
 
@@ -117,6 +120,8 @@ Desde la raíz del proyecto, ejecuta:
 ```bash
 python -m scr.report_pipeline --date 2026_01 --format cliente
 ```
+
+El argumento `--format` acepta los valores `cliente` y `winba`; si se omite, el valor predeterminado es `cliente`.
 
 ### Nota importante sobre la fecha
 
@@ -136,7 +141,9 @@ Si el proceso termina correctamente, el reporte se generará en la carpeta:
 data/output/<periodo>/
 ```
 
-El resultado final se exporta en formato Excel y queda listo para revisión.
+El resultado final se exporta en formato Excel y queda listo para revisión. El archivo utiliza el nombre `Sofom - Amarre de facturación Invoicing con MTD SAT <periodo>.xlsx`.
+
+Además, el log transformado de Edicom se guarda en `data/edicom/logs/<año>/`.
 
 ## Flujo interno del proyecto
 
@@ -144,21 +151,23 @@ El resultado final se exporta en formato Excel y queda listo para revisión.
 CLI (--date)
   |
   v
-scr/report-pipeline.py
+scr/report_pipeline.py
   |
   +--> scr/orchestrator.py
   |      +--> scr/loader.py
-  |      +--> archivos locales
-  |      +--> consultas SQL
-  |      +--> scr/database.py
-  |
-  +--> scr/transformer.py
-  |
-  +--> scr/integration.py
-  |
-  +--> scr/export.py
+  |      |      +--> archivos locales
+  |      |      +--> consultas SQL
+  |      |      +--> scr/database.py
+  |      +--> scr/transformer.py
+  |      +--> scr/integration.py
+  |      |      +--> coincidencia exacta
+  |      |      +--> coincidencia por tolerancia
+  |      |      +--> coincidencia por UUID
+  |      +--> scr/export.py
 
 ```
+
+En la integración se combinan los datos por UUID y se reconcilian conceptos CFDI mediante coincidencia exacta, una tolerancia absoluta de hasta una unidad y, finalmente, UUID únicos disponibles. También se calculan resúmenes y diferencias de subtotal.
 
 ## Pruebas
 
@@ -206,6 +215,7 @@ Revisa que:
 
 - los datos de entrada existan en las carpetas esperadas,
 - el periodo solicitado sea válido,
+- los logs históricos requeridos estén disponibles,
 - el proceso no haya terminado con errores antes de la exportación.
 
 ## Notas finales

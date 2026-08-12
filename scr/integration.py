@@ -1,8 +1,10 @@
 """Business-rule integration logic for consolidating source datasets and producing summaries."""
 
 import logging
-import pandas as pd
+
 import numpy as np
+import pandas as pd
+
 from scr.models import (
     MONTHS,
     DifferencesResult,
@@ -14,15 +16,24 @@ from scr.models import (
 # Module logger
 logger = logging.getLogger(__name__)
 from scr.models import (
+    normalized_edicom_column_names,
+    normalized_metadata_column_names,
     prefixes,
     raw_edicom_column_names,
     raw_metadata_column_names,
-    normalized_edicom_column_names,
-    normalized_metadata_column_names,
 )
 
 
 def build_prefix_conditions(consolidated_df: pd.DataFrame) -> list:
+    """Build the prefix-matching conditions used to classify each invoice row.
+
+    Args:
+        consolidated_df: Integrated dataframe that contains the fields needed for
+            prefix detection, such as concept text, contract, series, and IVA.
+
+    Returns:
+        A list of boolean masks describing each prefix rule.
+    """
     receptor_name = (
         consolidated_df["RECEPTOR NOMBRE"].fillna("").astype(str).str.strip()
     )
@@ -195,6 +206,15 @@ def build_prefix_conditions(consolidated_df: pd.DataFrame) -> list:
 
 
 def build_conciliation_conditions(consolidated_df: pd.DataFrame) -> tuple[list, list]:
+    """Build the status conditions that describe how the sources reconcile.
+
+    Args:
+        consolidated_df: Integrated dataframe containing UUID, metadata, RFC, and
+            concept totals from the comparison sources.
+
+    Returns:
+        A tuple with the conditions and their corresponding labels.
+    """
     condiciones = [
         consolidated_df["UUID"].notna()
         & consolidated_df["Uuid"].notna()
@@ -249,6 +269,15 @@ def integrate_data(consolidated_df: pd.DataFrame) -> pd.DataFrame:
 def integrate_status(
     consolidated_df: pd.DataFrame,
 ) -> pd.DataFrame:
+    """Compare Edicom and metadata status values and normalize the result column.
+
+    Args:
+        consolidated_df: Dataframe containing the status values to compare.
+
+    Returns:
+        The same dataframe with an internal report status column and a normalized
+        ESTATUS column.
+    """
 
     try:
         consolidated_df["ESTATUS REPORTE INTERNO VS METADATA"] = np.where(
@@ -275,6 +304,14 @@ def integrate_status(
 def calculate_currency_fields(
     consolidated_df: pd.DataFrame,
 ) -> pd.DataFrame:
+    """Calculate the converted monetary values for the consolidated records.
+
+    Args:
+        consolidated_df: Integrated dataframe that includes amounts and the FX rate.
+
+    Returns:
+        The dataframe enriched with the MXN-equivalent cash fields.
+    """
 
     consolidated_df["Tipo de cambio"] = pd.to_numeric(
         consolidated_df["TIPO_CAMBIO"],
@@ -311,6 +348,14 @@ def calculate_currency_fields(
 def assign_prefix(
     consolidated_df: pd.DataFrame,
 ) -> pd.DataFrame:
+    """Assign the prefix category for each concept based on business rules.
+
+    Args:
+        consolidated_df: Integrated dataframe containing invoice concepts and IVA.
+
+    Returns:
+        The dataframe with a PREFIJO column assigned using the prefix masks.
+    """
 
     consolidated_df["IVA"] = consolidated_df["IVA"].fillna("-")
 
@@ -338,6 +383,15 @@ def assign_prefix(
 def assign_conciliation(
     consolidated_df: pd.DataFrame,
 ) -> pd.DataFrame:
+    """Assign the reconciliation label that explains source coverage.
+
+    Args:
+        consolidated_df: Integrated dataframe to evaluate against the reconciliation
+            conditions.
+
+    Returns:
+        The dataframe with the IDENTIFICADO column populated.
+    """
 
     (
         conciliation_conditions,
@@ -356,9 +410,17 @@ def assign_conciliation(
 def finalize_dataframe(
     consolidated_df: pd.DataFrame,
 ) -> pd.DataFrame:
+    """Sort and rename the consolidated dataframe into its final export shape.
+
+    Args:
+        consolidated_df: Integrated dataframe before final column naming.
+
+    Returns:
+        The dataframe sorted by RFC, month, day, UUID and renamed to the final
+        column schema.
+    """
 
     if "UUID" in consolidated_df.columns:
-
         consolidated_df["priority"] = (consolidated_df["OBSERVACIONES"] == "-").astype(
             int
         )
@@ -463,6 +525,16 @@ def get_summary(
     transformed_metadata_info_df: pd.DataFrame,
     transformed_cfdi_info_df: pd.DataFrame,
 ) -> SummaryResult:
+    """Create the summary object for the three reporting sources.
+
+    Args:
+        normalized_df: Consolidated Edicom dataframe.
+        transformed_metadata_info_df: Transformed metadata dataframe.
+        transformed_cfdi_info_df: Transformed CFDI dataframe.
+
+    Returns:
+        A SummaryResult containing the Edicom, metadata, and CFDI summaries.
+    """
 
     column_order = [
         "RFC_EMISOR",
@@ -491,6 +563,14 @@ def get_summary(
 def build_edicom_summary(
     normalized_df: pd.DataFrame,
 ) -> pd.DataFrame:
+    """Summarize Edicom status totals by issuer and month.
+
+    Args:
+        normalized_df: Consolidated dataframe with Edicom records.
+
+    Returns:
+        A dataframe with counts and totals for current and canceled invoices.
+    """
 
     edicom_base = normalized_df.groupby(
         ["Periodo", "UUID"],
@@ -536,6 +616,14 @@ def build_edicom_summary(
 def build_metadata_summary(
     transformed_metadata_info_df: pd.DataFrame,
 ) -> pd.DataFrame:
+    """Summarize metadata totals by issuer and month.
+
+    Args:
+        transformed_metadata_info_df: Metadata dataframe after transformation.
+
+    Returns:
+        A dataframe with metadata counts and totals by status.
+    """
 
     metadata_base = transformed_metadata_info_df.groupby(
         ["Periodo", "Uuid"],
@@ -581,6 +669,14 @@ def build_metadata_summary(
 def build_factura_summary(
     transformed_cfdi_info_df: pd.DataFrame,
 ) -> pd.DataFrame:
+    """Summarize CFDI status totals by issuer and month.
+
+    Args:
+        transformed_cfdi_info_df: CFDI dataframe after transformation.
+
+    Returns:
+        A dataframe with invoice counts and totals segmented by status.
+    """
 
     cfdi_base = transformed_cfdi_info_df.groupby(
         ["FECHA_PERIODO", "UUID"],
@@ -632,6 +728,14 @@ def build_factura_summary(
 def finalize_summary(
     resumen: pd.DataFrame,
 ) -> pd.DataFrame:
+    """Finalize summary totals by converting values and adding the overall total row.
+
+    Args:
+        resumen: Summary dataframe before the final aggregation row is added.
+
+    Returns:
+        The summary dataframe with integer totals and a TOTAL row.
+    """
 
     resumen["TOTAL_VIGENTES"] = resumen["TOTAL_VIGENTES"].round(0).astype(int)
 
@@ -655,6 +759,14 @@ def finalize_summary(
 
 
 def get_missing_systems(row):
+    """Return the source systems missing for a given comparison row.
+
+    Args:
+        row: A row from a comparison dataframe.
+
+    Returns:
+        A comma-separated list of source systems that are absent.
+    """
     missing = []
 
     if not row["FACTURAS"]:
@@ -670,6 +782,14 @@ def get_missing_systems(row):
 
 
 def get_present_systems(row):
+    """Return the source systems that are present for a given comparison row.
+
+    Args:
+        row: A row from a comparison dataframe.
+
+    Returns:
+        A comma-separated list of source systems that are present.
+    """
     present = []
 
     if row["FACTURAS"]:
@@ -730,6 +850,16 @@ def build_uuid_differences(
     transformed_metadata_info_df: pd.DataFrame,
     transformed_cfdi_info_df: pd.DataFrame,
 ) -> pd.DataFrame:
+    """Identify the UUIDs that are missing from one or more source systems.
+
+    Args:
+        consolidated_df: Consolidated dataframe with Edicom rows.
+        transformed_metadata_info_df: Metadata rows for the current period.
+        transformed_cfdi_info_df: CFDI rows for the current period.
+
+    Returns:
+        A dataframe that flags which systems include each UUID.
+    """
     cfdis_uuids = set(transformed_cfdi_info_df["UUID"].dropna())
     edicom_uuids = set(consolidated_df["UUID"].dropna())
     metadata_uuids = set(transformed_metadata_info_df["Uuid"].dropna())
@@ -768,6 +898,18 @@ def build_metadata_missings(
     transformed_metadata_info_df: pd.DataFrame,
     transformed_cfdi_info_df: pd.DataFrame,
 ) -> pd.DataFrame:
+    """Merge metadata records with the CFDI dataframe for subtree comparison.
+
+    Args:
+        consolidated_df: Consolidated dataset used as the baseline.
+        metadata_uuids: UUIDs that are missing from the metadata source.
+        transformed_metadata_info_df: Metadata rows after transformation.
+        transformed_cfdi_info_df: CFDI rows after transformation.
+
+    Returns:
+        A dataframe that combines the consolidated data with the metadata rows in
+        need of comparison.
+    """
     metadata_missings_df = transformed_metadata_info_df[
         transformed_metadata_info_df["Uuid"].isin(metadata_uuids)
     ]
@@ -798,6 +940,14 @@ def build_metadata_missings(
 def join_dfs(
     transformed_df_results: TransformedResult,
 ) -> pd.DataFrame:
+    """Assemble the merged dataset using exact, tolerance, and UUID match stages.
+
+    Args:
+        transformed_df_results: Transformed data from Edicom, metadata, and CFDI.
+
+    Returns:
+        The final consolidated dataframe after all matching steps.
+    """
 
     consolidated_df = merge_metadata(transformed_df_results)
 
@@ -829,6 +979,14 @@ def join_dfs(
 def merge_metadata(
     transformed_df_results: TransformedResult,
 ) -> pd.DataFrame:
+    """Merge Edicom rows to the unique metadata values by UUID.
+
+    Args:
+        transformed_df_results: Transformed source data for the current period.
+
+    Returns:
+        A DataFrame with Edicom rows enriched by metadata columns when available.
+    """
 
     metadata_unique = transformed_df_results.metadata.drop_duplicates(
         subset=["Uuid"], keep="first"
@@ -848,6 +1006,15 @@ def exact_match(
     consolidated_df: pd.DataFrame,
     factura_df: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Match Edicom rows to CFDI rows using an exact UUID and total key.
+
+    Args:
+        consolidated_df: Merged Edicom and metadata dataframe.
+        factura_df: CFDI dataframe to match against.
+
+    Returns:
+        A tuple with the exact matches and the unmatched Edicom rows.
+    """
 
     left = consolidated_df.copy()
     right = factura_df.copy()
@@ -881,13 +1048,20 @@ def exact_match(
 def select_best_matches(
     candidates: pd.DataFrame,
 ) -> pd.DataFrame:
+    """Select the best one-to-one candidate rows without reusing the same concept.
+
+    Args:
+        candidates: Candidate matches between source rows.
+
+    Returns:
+        A dataframe with a non-duplicated set of selected matches.
+    """
 
     used_conceptos = set()
     used_facturas = set()
     selected_rows = []
 
     for _, row in candidates.iterrows():
-
         concepto_id = row["CONCEPTO_ID"]
         factura_id = row["CFDI_ID"]
 
@@ -910,6 +1084,16 @@ def tolerance_match(
     unmatched_edicom: pd.DataFrame,
     factura_df: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Match remaining Edicom rows to CFDI rows by UUID and near-equal total.
+
+    Args:
+        matched_exact: Rows already matched by exact rules.
+        unmatched_edicom: Remaining Edicom rows not yet matched.
+        factura_df: CFDI dataframe available for matching.
+
+    Returns:
+        The matched rows, the still-unmatched rows, and the available CFDI rows.
+    """
 
     unmatched_edicom = unmatched_edicom.loc[
         :,
@@ -931,10 +1115,12 @@ def tolerance_match(
     available_cfdi = factura_df[
         ~factura_df.apply(
             lambda r: (
-                r["UUID"],
-                r["TOTAL_CONCEPTO"],
-            )
-            in used_cfdi_keys,
+                (
+                    r["UUID"],
+                    r["TOTAL_CONCEPTO"],
+                )
+                in used_cfdi_keys
+            ),
             axis=1,
         )
     ].copy()
@@ -961,7 +1147,6 @@ def tolerance_match(
     selected_rows = []
 
     for _, row in candidates.iterrows():
-
         concepto_id = row["CONCEPTO_ID"]
         factura_id = row["CFDI_ID"]
 
@@ -988,10 +1173,12 @@ def tolerance_match(
     unmatched_diff = unmatched_edicom[
         ~unmatched_edicom.apply(
             lambda r: (
-                r["UUID"],
-                r["TOTAL CONCEPTO"],
-            )
-            in matched_keys,
+                (
+                    r["UUID"],
+                    r["TOTAL CONCEPTO"],
+                )
+                in matched_keys
+            ),
             axis=1,
         )
     ].copy()
@@ -1016,6 +1203,16 @@ def uuid_match(
     available_cfdi: pd.DataFrame,
     matched_diff: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Match the remaining rows when the UUID is unique within the available CFDI set.
+
+    Args:
+        unmatched_diff: Rows still unmatched after the tolerance pass.
+        available_cfdi: CFDI rows still available for matching.
+        matched_diff: Rows already matched in the tolerance pass.
+
+    Returns:
+        The UUID-only matches and the final rows that remain unmatched.
+    """
 
     used_uuids_diff = set(matched_diff["UUID"])
 
@@ -1056,6 +1253,17 @@ def build_final_df(
     uuid_only_matches: pd.DataFrame,
     unmatched_definitive: pd.DataFrame,
 ) -> pd.DataFrame:
+    """Concatenate the exact, tolerance, UUID-only, and unmatched match outputs.
+
+    Args:
+        matched_exact: Rows matched by exact equality.
+        matched_diff: Rows matched by tolerance logic.
+        uuid_only_matches: Rows matched via unique UUID availability.
+        unmatched_definitive: Rows still without a match.
+
+    Returns:
+        A final combined dataframe preserving the existing matching pipeline order.
+    """
 
     return pd.concat(
         [

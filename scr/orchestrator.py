@@ -6,10 +6,9 @@ import logging
 
 import pandas as pd
 
-from scr.export import export_to_client_format, save_log, export_to_winba_format
+from scr.export import export_to_client_format, export_to_winba_format, save_log
 from scr.integration import (
     get_differences,
-    get_subtotal_differences,
     get_summary,
     integrate_data,
     join_dfs,
@@ -142,7 +141,20 @@ def reload_differences(
     differences_result: DifferencesResult,
     date_: str,
 ) -> DifferencesReportResult:
-    """Reload the differences DataFrames based on the provided UUID lists."""
+    """Build the report-ready difference datasets for the current period.
+
+    The function reconstructs the UUID and subtotal comparison slices using the
+    original filtered metadata and the full CFDI rows for the affected UUIDs.
+
+    Args:
+        transformed_df_results: Normalized source data for the current period.
+        differences_result: Difference summary produced from the consolidated view.
+        date_: Period identifier in the YYYY_MM format.
+
+    Returns:
+        A structured result object containing the consolidated and source-specific
+        difference tables for export.
+    """
     rfc_emisor_list = (
         transformed_df_results.factura["RFC_EMISOR"].dropna().unique().tolist()
     )
@@ -240,6 +252,16 @@ def filter_by_uuid(
     uuids: list[str],
     uuid_column: str = "UUID",
 ) -> pd.DataFrame:
+    """Return the rows whose UUID column matches a provided list of identifiers.
+
+    Args:
+        df: Source dataframe to filter.
+        uuids: UUID values to keep in the result.
+        uuid_column: Column name that stores the UUID values.
+
+    Returns:
+        A dataframe containing only the rows whose identifier is in ``uuids``.
+    """
     return df[df[uuid_column].isin(uuids)]
 
 
@@ -270,7 +292,7 @@ def build_report(date_: str, format_: str) -> bool:
     summary_df_results = get_summary(
         consolidated_df, transformed_df_results.metadata, transformed_df_results.factura
     )
-    differences_result  = get_differences(consolidated_df, transformed_df_results)
+    differences_result = get_differences(consolidated_df, transformed_df_results)
     differences_report_result = reload_differences(
         transformed_df_results,
         differences_result,

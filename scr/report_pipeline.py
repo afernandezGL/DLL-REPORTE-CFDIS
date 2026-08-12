@@ -1,9 +1,10 @@
 """Entry point for the CFDI reporting pipeline."""
 
-import logging
-from datetime import datetime
 import argparse
+import logging
 from argparse import Namespace
+from datetime import datetime
+
 from scr.orchestrator import build_report
 
 logger = logging.getLogger(__name__)
