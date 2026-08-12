@@ -12,7 +12,8 @@ cfdi_query = """
         FECHA,
         TIPO_COMPROBANTE,
         TOTAL as TOTAL_FACTURA,
-        SUBTOTAL as SUBTOTAL_FACTURA
+        SUBTOTAL as SUBTOTAL_FACTURA, 
+        SUBTOTAL_MXN as SUBTOTAL_FACTURA_MXN
     FROM DLL.SAT.REPORTE_BASICO_CONCEPTOS_IMPUESTOS
         WHERE YEAR(FECHA) = {year}
         AND RFC_EMISOR IN ({rfc_emisor_list})
@@ -22,7 +23,6 @@ cfdi_query = """
 
 full_cfdi_query = """
     SELECT
-        COMPROBANTE_ID,
         RFC_REGISTRO,
         UUID,
         FECHA,

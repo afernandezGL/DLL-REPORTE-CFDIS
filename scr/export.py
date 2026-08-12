@@ -4,24 +4,34 @@ import logging
 from copy import copy
 import pandas as pd
 from pathlib import Path
+import numpy as np
 from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.styles import PatternFill, Font, Border, Side, Alignment
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.utils import get_column_letter
 from config.config import OUTPUT_FOLDER, EDICOM_LOG_FOLDER_NAME
-from scr.models import MONTH_MAP, edicom_log_column_names, columns_to_export
+from scr.models import (
+    MONTH_MAP,
+    DifferencesReportResult,
+    SummaryResult,
+    edicom_log_column_names,
+    columns_to_export,
+)
 from scr.stryles import (
+    BEIGE,
     BLACK,
     BLUE_BRIGHT,
     COLUMN_COLORS,
     COLUMN_GROUPS,
     COLUMN_GROUPS,
+    DIFF_COLOR_NAMES,
     GREY,
     GROUP_COLORS,
     RED_BRIGHT,
     WHITE,
     YELLOW,
+    diff_display_names,
 )
 
 logger = logging.getLogger(__name__)
@@ -69,131 +79,255 @@ def setup_resumen_header(
 
     return 8
 
-def add_metadata_detail_table(ws: Worksheet, metadata_df: pd.DataFrame, title_row: int = 8, title: str = "DETALLE METADATA"):
-    subtitle_row = title_row + 1
-    header_row = subtitle_row + 1
 
-    ws.merge_cells(
-        start_row=title_row,
-        start_column=1,
-        end_row=title_row,
-        end_column=len(metadata_df.columns),
-    )
-
-    cell = ws.cell(title_row, 1)
-
-    cell.value = title
-
-    cell.fill = PatternFill("solid", fgColor=GREY)
-
-    cell.font = Font(bold=True, color=WHITE)
-
-    cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-
-    ws.merge_cells(
-        start_row=subtitle_row,
-        start_column=1,
-        end_row=subtitle_row,
-        end_column=len(metadata_df.columns),
-    )
-
-    cell = ws.cell(subtitle_row, 1)
-
-    cell.value = "METADATA SAT"
-
-    cell.fill = PatternFill("solid", fgColor=BLUE_BRIGHT)
-
-    cell.font = Font(bold=True, color=WHITE)
-
-    cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-
-    for row in dataframe_to_rows(metadata_df, index=False, header=True):
-        ws.append(row)
-
-    for cell in ws[header_row]:
-        cell.fill = PatternFill("solid", fgColor=BLUE_BRIGHT)
-
-        cell.font = Font(bold=True, color=WHITE)
-
-        cell.alignment = Alignment(horizontal="center", vertical="center")
-
-    # ws.freeze_panes = f"A{header_row + 1}"
-
-    ws.auto_filter.ref = (
-        f"A{header_row}:" f"{ws.cell(ws.max_row, ws.max_column).coordinate}"
-    )
-
-
-def add_cfdi_detail_table(ws: Worksheet, cfdi_df: pd.DataFrame, title_row: int = 8, title: str = "DETALLE CFDI"):
-    subtitle_row = title_row + 1
-    header_row = subtitle_row + 1
-
-    ws.merge_cells(
-        start_row=title_row,
-        start_column=1,
-        end_row=title_row,
-        end_column=len(cfdi_df.columns),
-    )
-
-    cell = ws.cell(title_row, 1)
-
-    cell.value = title
-
-    cell.fill = PatternFill("solid", fgColor=GREY)
-
-    cell.font = Font(bold=True, color=WHITE)
-
-    cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-
-    ws.merge_cells(
-        start_row=subtitle_row,
-        start_column=1,
-        end_row=subtitle_row,
-        end_column=len(cfdi_df.columns),
-    )
-
-    cell = ws.cell(subtitle_row, 1)
-
-    cell.value = "DETALLE CFDI"
-
-    cell.fill = PatternFill("solid", fgColor=RED_BRIGHT)
-
-    cell.font = Font(bold=True, color=WHITE)
-
-    cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-
-    for row in dataframe_to_rows(cfdi_df, index=False, header=True):
-        ws.append(row)
-
-    for cell in ws[header_row]:
-        cell.fill = PatternFill("solid", fgColor=RED_BRIGHT)
-
-        cell.font = Font(bold=True, color=WHITE)
-
-        cell.alignment = Alignment(horizontal="center", vertical="center")
-
-    # ws.freeze_panes = f"A{header_row + 1}"
-
-    ws.auto_filter.ref = (
-        f"A{header_row}:" f"{ws.cell(ws.max_row, ws.max_column).coordinate}"
-    )
-
-def add_consolidated_detail_table(
-    cols_present: list, ws: Worksheet, consolidated_df: pd.DataFrame, title_row: int = 8, title: str = "CONSOLIDADO"
+def add_metadata_detail_table(
+    ws: Worksheet,
+    metadata_df: pd.DataFrame,
+    title_row: int = 8,
+    title: str = "DETALLE METADATA",
 ):
     subtitle_row = title_row + 1
     header_row = subtitle_row + 1
 
-    ws.merge_cells(
-        start_row=title_row,
-        start_column=1,
-        end_row=title_row,
-        end_column=len(cols_present),
+    total_cols = len(metadata_df.columns)
+
+    for col in range(1, total_cols + 1):
+        ws.cell(title_row, col).fill = PatternFill(
+            "solid",
+            fgColor=GREY,
+        )
+
+    cell = ws.cell(title_row, 1)
+    cell.value = title
+    cell.font = Font(bold=True, color=WHITE)
+    cell.alignment = Alignment(
+        horizontal="center",
+        vertical="center",
+        wrap_text=True,
     )
+
+    for col in range(1, total_cols + 1):
+        ws.cell(subtitle_row, col).fill = PatternFill(
+            "solid",
+            fgColor=BLUE_BRIGHT,
+        )
+
+    cell = ws.cell(subtitle_row, 1)
+    cell.value = "METADATA SAT"
+    cell.font = Font(bold=True, color=WHITE)
+    cell.alignment = Alignment(
+        horizontal="center",
+        vertical="center",
+        wrap_text=True,
+    )
+    for row_idx, row in enumerate(
+        dataframe_to_rows(
+            metadata_df,
+            index=False,
+            header=True,
+        ),
+        start=header_row,
+    ):
+        for col_idx, value in enumerate(row, start=1):
+            ws.cell(
+                row=row_idx,
+                column=col_idx,
+                value=value,
+            )
+
+    for col_idx in range(1, total_cols + 1):
+        cell = ws.cell(header_row, col_idx)
+
+        cell.fill = PatternFill(
+            "solid",
+            fgColor=BLUE_BRIGHT,
+        )
+
+        cell.font = Font(
+            bold=True,
+            color=WHITE,
+        )
+
+        cell.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+        )
+
+    ws.auto_filter.ref = (
+        f"A{header_row}:" f"{ws.cell(ws.max_row, ws.max_column).coordinate}"
+    )
+
+
+def add_edicom_detail_table(
+    ws: Worksheet,
+    edicom_df: pd.DataFrame,
+    title_row: int = 8,
+    title: str = "EDICOM",
+):
+    subtitle_row = title_row + 1
+    header_row = subtitle_row + 1
+
+    total_cols = len(edicom_df.columns)
+
+    for col in range(1, total_cols + 1):
+        ws.cell(title_row, col).fill = PatternFill(
+            "solid",
+            fgColor=GREY,
+        )
+
+    cell = ws.cell(title_row, 1)
+    cell.value = title
+    cell.font = Font(bold=True, color=WHITE)
+    cell.alignment = Alignment(
+        horizontal="center",
+        vertical="center",
+        wrap_text=True,
+    )
+
+    for col in range(1, total_cols + 1):
+        ws.cell(subtitle_row, col).fill = PatternFill(
+            "solid",
+            fgColor=BEIGE,
+        )
+
+    cell = ws.cell(subtitle_row, 1)
+    cell.value = "DETALLE EDICOM"
+    cell.font = Font(bold=True, color=BLACK)
+    cell.alignment = Alignment(
+        horizontal="center",
+        vertical="center",
+        wrap_text=True,
+    )
+    for row_idx, row in enumerate(
+        dataframe_to_rows(
+            edicom_df,
+            index=False,
+            header=True,
+        ),
+        start=header_row,
+    ):
+        for col_idx, value in enumerate(row, start=1):
+            ws.cell(
+                row=row_idx,
+                column=col_idx,
+                value=value,
+            )
+
+    for col_idx in range(1, total_cols + 1):
+        cell = ws.cell(header_row, col_idx)
+
+        cell.fill = PatternFill(
+            "solid",
+            fgColor=BEIGE,  # o el color correspondiente
+        )
+
+        cell.font = Font(
+            bold=True,
+            color=BLACK,
+        )
+
+        cell.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+        )
+
+    ws.auto_filter.ref = (
+        f"A{header_row}:" f"{ws.cell(ws.max_row, ws.max_column).coordinate}"
+    )
+
+
+def add_cfdi_detail_table(
+    ws: Worksheet,
+    cfdi_df: pd.DataFrame,
+    title_row: int = 8,
+    title: str = "DETALLE CFDI",
+):
+    subtitle_row = title_row + 1
+    header_row = subtitle_row + 1
+
+    total_cols = len(cfdi_df.columns)
+
+    for col in range(1, total_cols + 1):
+        ws.cell(title_row, col).fill = PatternFill(
+            "solid",
+            fgColor=GREY,
+        )
+
+    cell = ws.cell(title_row, 1)
+    cell.value = title
+    cell.font = Font(bold=True, color=WHITE)
+    cell.alignment = Alignment(
+        horizontal="center",
+        vertical="center",
+        wrap_text=True,
+    )
+
+    for col in range(1, total_cols + 1):
+        ws.cell(subtitle_row, col).fill = PatternFill(
+            "solid",
+            fgColor=RED_BRIGHT,
+        )
+
+    cell = ws.cell(subtitle_row, 1)
+    cell.value = "DETALLE CFDI"
+    cell.font = Font(bold=True, color=WHITE)
+    cell.alignment = Alignment(
+        horizontal="center",
+        vertical="center",
+        wrap_text=True,
+    )
+
+    for row_idx, row in enumerate(
+        dataframe_to_rows(
+            cfdi_df,
+            index=False,
+            header=True,
+        ),
+        start=header_row,
+    ):
+        for col_idx, value in enumerate(row, start=1):
+            ws.cell(
+                row=row_idx,
+                column=col_idx,
+                value=value,
+            )
+
+    for col_idx in range(1, total_cols + 1):
+        cell = ws.cell(header_row, col_idx)
+
+        cell.fill = PatternFill(
+            "solid",
+            fgColor=RED_BRIGHT,
+        )
+
+        cell.font = Font(
+            bold=True,
+            color=WHITE,
+        )
+
+        cell.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+        )
+
+    ws.auto_filter.ref = (
+        f"A{header_row}:" f"{ws.cell(ws.max_row, ws.max_column).coordinate}"
+    )
+
+
+def add_consolidated_detail_table(
+    cols_present: list,
+    ws: Worksheet,
+    consolidated_df: pd.DataFrame,
+    title_row: int = 8,
+    title: str = "CONSOLIDADO",
+):
+    subtitle_row = title_row + 1
+    header_row = subtitle_row + 1
 
     cell = ws.cell(title_row, 1)
 
-    cell.value = title
+    ws.cell(title_row, 1).value = title
 
     cell.fill = PatternFill("solid", fgColor=GREY)
 
@@ -201,12 +335,11 @@ def add_consolidated_detail_table(
 
     cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
-    # ws.merge_cells(
-    #     start_row=title_row,
-    #     start_column=1,
-    #     end_row=title_row,
-    #     end_column=len(cols_present),
-    # )
+    for col in range(1, len(cols_present) + 1):
+        ws.cell(title_row, col).fill = PatternFill(
+            fill_type="solid",
+            fgColor=GREY,
+        )
 
     start_col = 1
     current_group = None
@@ -220,10 +353,7 @@ def add_consolidated_detail_table(
 
         elif group != current_group:
             end_col = idx - 1
-            group_color = GROUP_COLORS.get(
-                current_group,
-                "D9D9D9"
-            )
+            group_color = GROUP_COLORS.get(current_group, "D9D9D9")
 
             # Pintar todas las columnas del grupo
             for col in range(start_col, end_col + 1):
@@ -232,26 +362,13 @@ def add_consolidated_detail_table(
                     fgColor=group_color,
                 )
 
-            # Solo fusionar si el grupo ocupa más de una columna
-            if end_col > start_col:
-                ws.merge_cells(
-                    start_row=subtitle_row,
-                    start_column=start_col,
-                    end_row=subtitle_row,
-                    end_column=end_col,
-                )
-
             # SIEMPRE escribir el texto del grupo
             cell = ws.cell(subtitle_row, start_col)
             cell.value = current_group
 
             cell.font = Font(
                 bold=True,
-                color=(
-                    WHITE
-                    if group_color in [RED_BRIGHT, BLUE_BRIGHT]
-                    else BLACK
-                ),
+                color=(WHITE if group_color in [RED_BRIGHT, BLUE_BRIGHT] else BLACK),
             )
 
             cell.alignment = Alignment(
@@ -269,10 +386,7 @@ def add_consolidated_detail_table(
 
     end_col = len(columns_to_export)
 
-    group_color = GROUP_COLORS.get(
-        current_group,
-        "D9D9D9"
-    )
+    group_color = GROUP_COLORS.get(current_group, "D9D9D9")
 
     for col in range(start_col, end_col + 1):
         ws.cell(subtitle_row, col).fill = PatternFill(
@@ -280,24 +394,12 @@ def add_consolidated_detail_table(
             fgColor=group_color,
         )
 
-    if end_col > start_col:
-        ws.merge_cells(
-            start_row=subtitle_row,
-            start_column=start_col,
-            end_row=subtitle_row,
-            end_column=end_col,
-        )
-
     cell = ws.cell(subtitle_row, start_col)
     cell.value = current_group
 
     cell.font = Font(
         bold=True,
-        color=(
-            WHITE
-            if group_color in [RED_BRIGHT, BLUE_BRIGHT]
-            else BLACK
-        ),
+        color=(WHITE if group_color in [RED_BRIGHT, BLUE_BRIGHT] else BLACK),
     )
 
     cell.alignment = Alignment(
@@ -371,17 +473,118 @@ def add_consolidated_detail_table(
                 ws.cell(row=row, column=col_idx).number_format = "#,##0.00"
 
 
+def add_subtotal_differences_detail_table(
+    ws: Worksheet,
+    subtotal_differences_df: pd.DataFrame,
+    title_row: int = 8,
+    title: str = "DIFERENCIAS POR SUBTOTALES",
+):
+    total_cols = len(subtotal_differences_df.columns)
+
+    # ======================
+    # TÍTULO
+    # ======================
+    for col in range(1, total_cols + 1):
+        ws.cell(title_row, col).fill = PatternFill(
+            "solid",
+            fgColor=GREY,
+        )
+
+    cell = ws.cell(title_row, 1)
+    cell.value = title
+    cell.font = Font(
+        bold=True,
+        color=WHITE,
+    )
+    cell.alignment = Alignment(
+        horizontal="left",
+        vertical="center",
+        wrap_text=True,
+    )
+
+    # ======================
+    # SUBTÍTULO
+    # ======================
+    subtitle_row = title_row + 1
+
+    for col in range(1, total_cols + 1):
+        ws.cell(subtitle_row, col).fill = PatternFill(
+            "solid",
+            fgColor=YELLOW,
+        )
+
+    cell = ws.cell(subtitle_row, 1)
+    cell.value = "COMPARATIVO"
+    cell.font = Font(
+        bold=True,
+        color=BLACK,
+    )
+    cell.alignment = Alignment(
+        horizontal="left",
+        vertical="center",
+        wrap_text=True,
+    )
+
+    # ======================
+    # ENCABEZADOS
+    # ======================
+    header_row = subtitle_row + 1
+
+    for col_idx, real_col in enumerate(
+        subtotal_differences_df.columns,
+        start=1,
+    ):
+        header_cell = ws.cell(
+            row=header_row,
+            column=col_idx,
+        )
+
+        header_cell.value = diff_display_names.get(
+            real_col,
+            str(real_col),
+        )
+
+        color = DIFF_COLOR_NAMES.get(
+            real_col,
+            YELLOW,
+        )
+
+        header_cell.fill = PatternFill(
+            fill_type="solid",
+            fgColor=color,
+        )
+
+        header_cell.font = Font(
+            bold=True,
+            color=WHITE if color in (BLUE_BRIGHT, RED_BRIGHT, GREY) else BLACK,
+        )
+    # ======================
+    # DATOS
+    # ======================
+    for row_idx, (_, row) in enumerate(
+        subtotal_differences_df.iterrows(),
+        start=header_row + 1,
+    ):
+        for col_idx, real_col in enumerate(
+            subtotal_differences_df.columns,
+            start=1,
+        ):
+            ws.cell(
+                row=row_idx,
+                column=col_idx,
+                value=row[real_col],
+            )
+
+    current_row = header_row + len(subtotal_differences_df) + 1
+
+    return current_row
+
+
 def export_to_winba_format(
     consolidated_df: pd.DataFrame,
     raw_metadata_info_df: pd.DataFrame,
-    edicom_resumen: pd.DataFrame,
-    metadata_resumen: pd.DataFrame,
-    factura_resumen: pd.DataFrame,
-    uuid_differences: pd.DataFrame,
-    edicom_differences_df: pd.DataFrame,
-    metadata_differences_df: pd.DataFrame,
-    cfdi_differences_df: pd.DataFrame,
-    subtotal_differences: pd.DataFrame,
+    summaries: SummaryResult,
+    differences: DifferencesReportResult,
     date_: str,
 ) -> bool:
     """Export the consolidated dataset and monthly summaries to an Excel workbook.
@@ -391,14 +594,8 @@ def export_to_winba_format(
 
     Args:
         consolidated_df: The fully processed and reconciled dataset.
-        edicom_resumen: Summary statistics for Edicom results.
-        metadata_resumen: Summary statistics for metadata results.
-        factura_resumen: Summary statistics for CFDI invoice results.
-        uuid_differences: DataFrame containing UUID differences.
-        edicom_differences_df: DataFrame containing Edicom differences.
-        metadata_differences_df: DataFrame containing Metadata differences.
-        cfdi_differences_df: DataFrame containing CFDI differences.
-        subtotal_differences: DataFrame containing subtotal differences.
+        summaries: Summary statistics for Edicom, metadata, and CFDI invoice results.
+        differences: DifferencesReportResult containing UUID and subtotal differences.
         date_: Period identifier used in the output file name.
 
     Returns:
@@ -434,26 +631,25 @@ def export_to_winba_format(
         month,
     )
 
-
     metadata_title_row = add_winba_resumen_block(
         ws=ws_resumen,
         current_row=8,
         title="EDICOM",
-        df=edicom_resumen,
+        df=summaries.edicom,
         color=COLUMN_COLORS["ESTATUS_EDICOM"],
     )
     factura_title_row = add_winba_resumen_block(
         ws=ws_resumen,
         current_row=metadata_title_row,
         title="METADATA",
-        df=metadata_resumen,
+        df=summaries.metadata,
         color=COLUMN_COLORS["ESTATUS"],
     )
     add_winba_resumen_block(
         ws=ws_resumen,
         current_row=factura_title_row,
         title="FACTURA",
-        df=factura_resumen,
+        df=summaries.factura,
         color=COLUMN_COLORS["USO CFDI"],
     )
     autofit_columns(ws_resumen)
@@ -467,8 +663,14 @@ def export_to_winba_format(
         year,
         month,
     )
-    add_consolidated_detail_table(cols_present, ws_consolidated, consolidated_df, title_row=8, title="CONCILIACIÓN EDICOM vs METADATA vs PARSEO FACTURAS")
-    autofit_columns(ws_consolidated)
+    add_consolidated_detail_table(
+        cols_present,
+        ws_consolidated,
+        consolidated_df,
+        title_row=8,
+        title="CONCILIACIÓN EDICOM vs METADATA vs PARSEO FACTURAS",
+    )
+    autofit_columns(ws_consolidated, ignore_columns=["S"])
 
     ws_metadata = wb.create_sheet("METADATA")
     setup_resumen_header(
@@ -479,36 +681,105 @@ def export_to_winba_format(
         year,
         month,
     )
-    add_metadata_detail_table(ws_metadata, raw_metadata_info_df, title_row=8, title="DETALLE METADATA")
+    add_metadata_detail_table(
+        ws_metadata, raw_metadata_info_df, title_row=8, title="DETALLE METADATA"
+    )
     autofit_columns(ws_metadata)
 
-    ws_diferencias = wb.create_sheet("DIFERENCIAS UUID")
+    ws_diferencias = wb.create_sheet("DIFERENCIAS CONSOLIDADO")
     setup_resumen_header(
         ws_diferencias,
         "A.1.3",
         "DLL LEASING / DE LAGE LANDEN",
-        "Detalle Diferencias por UUID" if uuid_differences.shape[0] > 0 else "No hay diferencias de UUID",
+        (
+            "Detalle Diferencias por UUID"
+            if differences.consolidated.shape[0] > 0
+            else "No hay diferencias de UUID"
+        ),
         year,
         month,
     )
-    add_differences_table(ws_diferencias, uuid_differences, title_row=8, title="DIFERENCIAS DE UUID")
-    add_metadata_detail_table(ws_diferencias, metadata_differences_df, title_row=ws_diferencias.max_row + 2, title="EDICOM DIFERENCIAS")
-    add_cfdi_detail_table(ws_diferencias, cfdi_differences_df, title_row=ws_diferencias.max_row + 2, title="CFDI DIFERENCIAS")
-    add_consolidated_detail_table(cols_present, ws_diferencias, edicom_differences_df, title_row=ws_diferencias.max_row + 2, title="EDICOM DIFERENCIAS")
+    add_differences_table(
+        ws_diferencias,
+        differences.consolidated,
+        title_row=8,
+        title="DIFERENCIAS DE UUID",
+    )
+    add_metadata_detail_table(
+        ws_diferencias,
+        differences.uuid.metadata,
+        title_row=ws_diferencias.max_row + 2,
+        title="METADATA DIFERENCIAS",
+    )
+    add_cfdi_detail_table(
+        ws_diferencias,
+        differences.uuid.factura,
+        title_row=ws_diferencias.max_row + 2,
+        title="FACTURAS DIFERENCIAS",
+    )
+    add_edicom_detail_table(
+        ws_diferencias,
+        differences.uuid.edicom,
+        title_row=ws_diferencias.max_row + 2,
+        title="EDICOM DIFERENCIAS",
+    )
     autofit_columns(ws_diferencias)
 
-    ws_diferencias_subtotal = wb.create_sheet("DIFERENCIAS SUBTOTAL")
+    ws_diferencias_subtotal = wb.create_sheet("SUBTOTALES")
     setup_resumen_header(
         ws_diferencias_subtotal,
         "A.1.4",
         "DLL LEASING / DE LAGE LANDEN",
-        "Detalle Diferencias por subtotales" if subtotal_differences.shape[0] > 0 else "No hay diferencias de subtotales",
+        "Detalle subtotales",
         year,
         month,
     )
-
-    add_consolidated_detail_table(cols_present, ws_diferencias_subtotal, subtotal_differences)
+    add_subtotal_differences_detail_table(
+        ws_diferencias_subtotal,
+        differences.comparative_subtotals,
+        title_row=8,
+        title="DIFERENCIAS DE SUBTOTALES",
+    )
     autofit_columns(ws_diferencias_subtotal)
+
+    ws_diferencias_subtotal = wb.create_sheet("DIFERENCIAS SUBTOTAL")
+    setup_resumen_header(
+        ws_diferencias_subtotal,
+        "A.1.5",
+        "DLL LEASING / DE LAGE LANDEN",
+        (
+            "Detalle Diferencias por subtotales"
+            if differences.comparative_subtotals.shape[0] > 0
+            else "No hay diferencias de subtotales"
+        ),
+        year,
+        month,
+    )
+    add_subtotal_differences_detail_table(
+        ws_diferencias_subtotal,
+        differences.relevant_comparative_subtotals,
+        title_row=8,
+        title="DIFERENCIAS DE SUBTOTALES",
+    )
+    add_metadata_detail_table(
+        ws_diferencias_subtotal,
+        differences.uuid.metadata,
+        title_row=ws_diferencias_subtotal.max_row + 2,
+        title="METADATA DIFERENCIAS",
+    )
+    add_cfdi_detail_table(
+        ws_diferencias_subtotal,
+        differences.uuid.factura,
+        title_row=ws_diferencias_subtotal.max_row + 2,
+        title="FACTURAS DIFERENCIAS",
+    )
+    add_edicom_detail_table(
+        ws_diferencias_subtotal,
+        differences.uuid.edicom,
+        title_row=ws_diferencias_subtotal.max_row + 2,
+        title="EDICOM DIFERENCIAS",
+    )
+    autofit_columns(ws_diferencias_subtotal, ignore_columns=["T"])
 
     return save_file(wb, date_)
 
@@ -519,9 +790,7 @@ def export_to_client_format(
     metadata_resumen: pd.DataFrame,
     factura_resumen: pd.DataFrame,
     uuid_differences: pd.DataFrame,
-    edicom_differences_df: pd.DataFrame,
-    metadata_differences_df: pd.DataFrame,
-    cfdi_differences_df: pd.DataFrame,
+    differences_dict: dict,
     subtotal_differences: pd.DataFrame,
     date_: str,
 ) -> bool:
@@ -784,67 +1053,100 @@ def export_to_client_format(
 
     ws_diferencias = wb.create_sheet("Diferencias uuid")
 
-    add_differences_table(ws_diferencias, uuid_differences, title_row=1, title="DIFERENCIAS DE UUID")
-    add_metadata_detail_table(ws_diferencias, metadata_differences_df, title_row=ws_diferencias.max_row + 2, title="EDICOM DIFERENCIAS")
-    add_cfdi_detail_table(ws_diferencias, cfdi_differences_df, title_row=ws_diferencias.max_row + 2, title="CFDI DIFERENCIAS")
-    add_consolidated_detail_table(cols_present, ws_diferencias, edicom_differences_df, title_row=ws_diferencias.max_row + 2, title="EDICOM DIFERENCIAS")
+    add_differences_table(
+        ws_diferencias, uuid_differences, title_row=1, title="DIFERENCIAS DE UUID"
+    )
+    add_metadata_detail_table(
+        ws_diferencias,
+        differences_dict["UUID"]["metadata"],
+        title_row=ws_diferencias.max_row + 2,
+        title="EDICOM DIFERENCIAS",
+    )
+    add_cfdi_detail_table(
+        ws_diferencias,
+        differences_dict["UUID"]["facturas"],
+        title_row=ws_diferencias.max_row + 2,
+        title="CFDI DIFERENCIAS",
+    )
+    add_consolidated_detail_table(
+        cols_present,
+        ws_diferencias,
+        differences_dict["UUID"]["edicom"],
+        title_row=ws_diferencias.max_row + 2,
+        title="EDICOM DIFERENCIAS",
+    )
     autofit_columns(ws_diferencias)
 
     ws_diferencias_subtotal = wb.create_sheet("Diferencias subtotal")
-    add_consolidated_detail_table(cols_present, ws_diferencias_subtotal, subtotal_differences, title_row=1, title="DIFERENCIAS DE SUBTOTALES")
+    add_consolidated_detail_table(
+        cols_present,
+        ws_diferencias_subtotal,
+        subtotal_differences,
+        title_row=1,
+        title="DIFERENCIAS DE SUBTOTALES",
+    )
     autofit_columns(ws_diferencias_subtotal)
-    
+
     return save_file(wb, date_)
 
-def add_differences_table(ws_diferencias: Worksheet, uuid_differences: pd.DataFrame, title_row: int = 0, title: str = "DIFERENCIAS DE UUID"):
-    ws_diferencias.merge_cells(
-        start_row=title_row,
-        start_column=1,
-        end_row=title_row,
-        end_column=len(uuid_differences.columns),
-    )
+
+def add_differences_table(
+    ws_diferencias: Worksheet,
+    uuid_differences: pd.DataFrame,
+    title_row: int = 0,
+    title: str = "DIFERENCIAS DE UUID",
+):
+    subtitle_row = title_row + 1
+    header_row = subtitle_row + 1
+
+    total_cols = len(uuid_differences.columns)
+
+    for col in range(1, total_cols + 1):
+        ws_diferencias.cell(title_row, col).fill = PatternFill(
+            "solid",
+            fgColor=GREY,
+        )
 
     cell = ws_diferencias.cell(title_row, 1)
-
     cell.value = title
+    cell.font = Font(bold=True, color=WHITE)
+    cell.alignment = Alignment(
+        horizontal="center",
+        vertical="center",
+        wrap_text=True,
+    )
 
-    cell.fill = PatternFill("solid", fgColor=YELLOW)
-
-    cell.font = Font(bold=True, color=BLACK)
-
-    cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-
-    for row_idx, row in enumerate(
-        dataframe_to_rows(
-            uuid_differences,
-            index=False,
-            header=True,
-        ),
-        start=title_row + 1,
-    ):
-        for col_idx, value in enumerate(row, start=1):
-            ws_diferencias.cell(
-                row=row_idx,
-                column=col_idx,
-                value=value,
-            )
-
-    # Formatear encabezados del DataFrame
-    for cell in ws_diferencias[title_row + 1]:
-        cell.fill = PatternFill(
-            fill_type="solid",
+    for col in range(1, total_cols + 1):
+        ws_diferencias.cell(subtitle_row, col).fill = PatternFill(
+            "solid",
             fgColor=YELLOW,
         )
-        cell.font = Font(
-            bold=True,
-        )
-        cell.alignment = Alignment(
-            horizontal="center",
-            vertical="center",
-        )
 
-    # Actualizar current_row para futuras secciones
-    current_row = title_row + len(uuid_differences) + 2 
+    cell = ws_diferencias.cell(subtitle_row, 1)
+    cell.value = "COMPARATIVO"
+    cell.font = Font(bold=True, color=BLACK)
+    cell.alignment = Alignment(
+        horizontal="center",
+        vertical="center",
+        wrap_text=True,
+    )
+
+    for row in dataframe_to_rows(uuid_differences, index=False, header=True):
+        ws_diferencias.append(row)
+
+    for cell in ws_diferencias[header_row]:
+        cell.fill = PatternFill("solid", fgColor=YELLOW)
+
+        cell.font = Font(bold=True, color=BLACK)
+
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    # ws.freeze_panes = f"A{header_row + 1}"
+
+    ws_diferencias.auto_filter.ref = (
+        f"A{header_row}:"
+        f"{ws_diferencias.cell(ws_diferencias.max_row, ws_diferencias.max_column).coordinate}"
+    )
 
 
 def save_file(wb: Workbook, date_: str) -> bool:
@@ -1018,10 +1320,13 @@ def apply_number_format_table(ws_resumen):
                 cell.number_format = "#,##0"
 
 
-def autofit_columns(ws):
+def autofit_columns(ws, ignore_columns=None):
     for column in ws.columns:
         max_length = 0
         column_letter = get_column_letter(column[0].column)
+
+        if ignore_columns and column_letter in ignore_columns:
+            continue
 
         for cell in column:
             if cell.value is not None:

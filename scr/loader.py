@@ -68,7 +68,7 @@ def get_metadata_info(date_: str) -> pd.DataFrame:
     logger.info("Loaded metadata dataframe", extra={"rows": int(raw_metadata_df.shape[0])})
     return raw_metadata_df
 
-def get_edicom_info(date_) -> pd.DataFrame:
+def get_edicom_info(date_: str) -> pd.DataFrame:
     """Load raw Edicom data from the workbook stored for the requested period.
 
     Args:

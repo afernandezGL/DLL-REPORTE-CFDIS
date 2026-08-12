@@ -1,3 +1,52 @@
+from dataclasses import dataclass
+import pandas as pd
+
+@dataclass
+class ReportResult:
+    edicom: pd.DataFrame
+    metadata: pd.DataFrame
+    factura: pd.DataFrame
+
+@dataclass
+class SummaryResult(ReportResult):
+    pass
+
+@dataclass
+class RawResult(ReportResult):
+    pass
+
+@dataclass
+class TransformedResult(ReportResult):
+    filtered_metadata: pd.DataFrame
+    normalize_edicom: pd.DataFrame
+
+@dataclass
+class ConsolidationResult():
+    consolidated: pd.DataFrame
+
+@dataclass
+class DifferencesUUIDResult:
+    edicom: list[str]
+    metadata: list[str]
+    facturas: list[str]
+
+
+@dataclass
+class DifferencesResult:
+    uuid: pd.DataFrame
+    subtotal: pd.DataFrame
+    relevant_uuid: DifferencesUUIDResult
+    relevant_subtotal: pd.DataFrame
+
+@dataclass
+class DifferencesReportResult:
+    consolidated: pd.DataFrame
+    comparative_subtotals: pd.DataFrame
+    relevant_comparative_subtotals: pd.DataFrame
+    uuid: ReportResult
+    subtotal: ReportResult
+
+
 raw_edicom_column_names = [
     "ESTATUS",
     "TIPODECOMPROBANTE",
@@ -144,29 +193,6 @@ CFDI_USE_MAP = {
     "CP01": "Pagos",
     "CN01": "Nómina",
 }
-
-# prefixes = [
-#     "REN ANT",
-#     "REN ANT 0%",
-#     "REN",
-#     "REN 0%",
-#     "VEN",
-#     "VEN 0%",
-#     "SEG VIDA",
-#     "SEG",
-#     "SUB",
-#     "ARR",
-#     "COM",
-#     "GAS",
-#     "OPC",
-#     "OSPREY",
-#     "PRI",
-#     "REEMBOLSO",
-#     "DE",
-#     "Factoraje",
-#     "SUBARR",
-#     "UDI",
-# ]
 
 prefixes = [
     "SUBARR",
