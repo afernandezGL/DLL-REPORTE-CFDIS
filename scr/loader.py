@@ -6,9 +6,10 @@ import zipfile
 import logging
 import pandas as pd
 from pathlib import Path
+import msoffcrypto
 
 from sqlalchemy import text, text
-from config.config import METADATA_FOLDER_NAME, EDICOM_FOLDER_NAME, EDICOM_LOG_FOLDER_NAME
+from config.config import METADATA_FOLDER_NAME, EDICOM_FOLDER_NAME, EDICOM_LOG_FOLDER_NAME, EDICOM_PASSWORD
 from scr.database import close_engine, get_engine
 from scr.models import MONTHS, edicom_log_column_names
 from data.sql.cfdi import cfdi_query, full_cfdi_query
@@ -40,26 +41,62 @@ def get_metadata_info(date_: str) -> pd.DataFrame:
     zip_files = [f for f in os.listdir(metadata_folder) if f.endswith(".zip")]
 
     if not zip_files:
-        logger.error("No .zip files found in metadata folder", extra={"folder": metadata_folder})
-        raise FileNotFoundError("No se encontro ningun archivo .zip en el directorio.")
-    elif len(zip_files) > 1:
-        logger.error("Multiple zip files found", extra={"zip_files": zip_files})
-        raise ValueError(
-            f"Se encontraron múltiples archivos .zip: {zip_files}. Solo se permite un archivo ZIP."
+        logger.error(
+            "No .zip files found in metadata folder",
+            extra={"folder": metadata_folder},
+        )
+        raise FileNotFoundError(
+            "No se encontró ningún archivo .zip en el directorio."
         )
 
-    zip_path = os.path.join(METADATA_FOLDER_NAME, date_, zip_files[0])
+    if len(zip_files) > 2:
+        logger.error(
+            "More than two zip files found",
+            extra={"zip_files": zip_files},
+        )
+        raise ValueError(
+            f"Se encontraron {len(zip_files)} archivos .zip: {zip_files}. "
+            "Solo se permiten máximo 2 archivos ZIP."
+        )
+
     raw_dfs = []
 
-    with zipfile.ZipFile(zip_path, "r") as zip_ref:
-        logger.debug("Opened metadata zip", extra={"zip_path": zip_path, "namelist": zip_ref.namelist()})
-        for name in zip_ref.namelist():
-            if name.endswith((".csv", ".txt")):
-                logger.debug("Reading file from zip", extra={"file": name})
-                with zip_ref.open(name) as file:
-                    file_data = io.BytesIO(file.read())
-                    df = pd.read_csv(file_data, sep="~", engine="python", quoting=csv.QUOTE_NONE)
-                    raw_dfs.append(df)
+    for zip_file in zip_files:
+        zip_path = os.path.join(
+            METADATA_FOLDER_NAME,
+            date_,
+            zip_file,
+        )
+
+        with zipfile.ZipFile(zip_path, "r") as zip_ref:
+            logger.debug(
+                "Opened metadata zip",
+                extra={
+                    "zip_path": zip_path,
+                    "namelist": zip_ref.namelist(),
+                },
+            )
+
+            for name in zip_ref.namelist():
+                if name.endswith((".csv", ".txt")):
+                    logger.debug(
+                        "Reading file from zip",
+                        extra={
+                            "zip_file": zip_file,
+                            "file": name,
+                        },
+                    )
+
+                    with zip_ref.open(name) as file:
+                        file_data = io.BytesIO(file.read())
+                        df = pd.read_csv(
+                            file_data,
+                            sep="~",
+                            engine="python",
+                            quoting=csv.QUOTE_NONE,
+                        )
+
+                        raw_dfs.append(df)
 
     if not raw_dfs:
         logger.error("ZIP does not contain CSV/TXT files", extra={"zip_path": zip_path})
@@ -68,11 +105,15 @@ def get_metadata_info(date_: str) -> pd.DataFrame:
     logger.info("Loaded metadata dataframe", extra={"rows": int(raw_metadata_df.shape[0])})
     return raw_metadata_df
 
-def get_edicom_info(date_: str) -> pd.DataFrame:
+
+def get_edicom_info(
+    date_: str
+) -> pd.DataFrame:
     """Load raw Edicom data from the workbook stored for the requested period.
 
     Args:
         date_: Period identifier in the YYYY_MM format.
+        password: Password used when the workbook is encrypted.
 
     Returns:
         A DataFrame containing the raw Edicom content from the Excel workbook.
@@ -81,23 +122,74 @@ def get_edicom_info(date_: str) -> pd.DataFrame:
         FileNotFoundError: If no XLSX workbook is found for the requested period.
         ValueError: If multiple workbook files are present in the target folder.
     """
+    folder = os.path.join(
+        EDICOM_FOLDER_NAME,
+        date_,
+    )
 
-    folder = os.path.join(EDICOM_FOLDER_NAME, date_)
-    logger.info("Loading Edicom info", extra={"folder": folder})
-    xlsx_files = [f for f in os.listdir(folder) if f.endswith(".xlsx")]
+    logger.info(
+        "Loading Edicom info",
+        extra={"folder": folder},
+    )
+
+    xlsx_files = [
+        f for f in os.listdir(folder)
+        if f.endswith(".xlsx")
+    ]
 
     if not xlsx_files:
-        logger.error("No .xlsx files found in edicom folder", extra={"folder": folder})
-        raise FileNotFoundError(f"No se encontró ningún archivo .xlsx en el directorio: {EDICOM_FOLDER_NAME}")
-    elif len(xlsx_files) > 1:
-        logger.error("Multiple xlsx files found", extra={"xlsx_files": xlsx_files})
-        raise ValueError(
-            f"Se encontraron múltiples archivos .xlsx: {xlsx_files}. Solo se permite un archivo XLSX."
+        logger.error(
+            "No .xlsx files found in edicom folder",
+            extra={"folder": folder},
+        )
+        raise FileNotFoundError(
+            f"No se encontró ningún archivo .xlsx en el directorio: {EDICOM_FOLDER_NAME}"
         )
 
-    xlsx_path = os.path.join(EDICOM_FOLDER_NAME, date_, xlsx_files[0])
-    raw_edicom_df = pd.read_excel(xlsx_path)
-    logger.info("Loaded edicom dataframe", extra={"rows": int(raw_edicom_df.shape[0])})
+    if len(xlsx_files) > 1:
+        logger.error(
+            "Multiple xlsx files found",
+            extra={"xlsx_files": xlsx_files},
+        )
+        raise ValueError(
+            f"Se encontraron múltiples archivos .xlsx: {xlsx_files}. "
+            "Solo se permite un archivo XLSX."
+        )
+
+    xlsx_path = os.path.join(
+        folder,
+        xlsx_files[0],
+    )
+    with open(xlsx_path, "rb") as file:
+        office_file = msoffcrypto.OfficeFile(file)
+
+        if office_file.is_encrypted():
+            if not EDICOM_PASSWORD:
+                raise ValueError(
+                    f"El archivo '{xlsx_files[0]}' está protegido y no se proporcionó contraseña."
+                )
+
+            logger.info(
+                "Encrypted workbook detected",
+                extra={"file": xlsx_files[0]},
+            )
+
+            office_file.load_key(password=EDICOM_PASSWORD)
+
+            decrypted = io.BytesIO()
+            office_file.decrypt(decrypted)
+            decrypted.seek(0)
+
+            raw_edicom_df = pd.read_excel(decrypted)
+
+        else:
+            raw_edicom_df = pd.read_excel(xlsx_path)
+
+    logger.info(
+        "Loaded edicom dataframe",
+        extra={"rows": int(raw_edicom_df.shape[0])},
+    )
+
     return raw_edicom_df
 
 def get_edicom_logs(date_: str) -> pd.DataFrame:

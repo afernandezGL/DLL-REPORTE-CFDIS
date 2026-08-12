@@ -2,6 +2,7 @@
 
 import logging
 from copy import copy
+from warnings import deprecated
 import pandas as pd
 from pathlib import Path
 import numpy as np
@@ -31,6 +32,7 @@ from scr.stryles import (
     RED_BRIGHT,
     WHITE,
     YELLOW,
+    DIFF_GROUP_NAMES,
     diff_display_names,
 )
 
@@ -502,24 +504,78 @@ def add_subtotal_differences_detail_table(
         wrap_text=True,
     )
 
-    # ======================
-    # SUBTÍTULO
-    # ======================
     subtitle_row = title_row + 1
 
-    for col in range(1, total_cols + 1):
-        ws.cell(subtitle_row, col).fill = PatternFill(
-            "solid",
-            fgColor=YELLOW,
+    current_color = None
+    start_col = 1
+
+    for col_idx, real_col in enumerate(
+        subtotal_differences_df.columns,
+        start=1,
+    ):
+        color = DIFF_COLOR_NAMES.get(
+            real_col,
+            YELLOW,
         )
 
-    cell = ws.cell(subtitle_row, 1)
-    cell.value = "COMPARATIVO"
-    cell.font = Font(
-        bold=True,
-        color=BLACK,
+        if current_color is None:
+            current_color = color
+            start_col = col_idx
+
+        elif color != current_color:
+
+            for col in range(start_col, col_idx):
+                ws.cell(subtitle_row, col).fill = PatternFill(
+                    "solid",
+                    fgColor=current_color,
+                )
+
+            group_cell = ws.cell(
+                subtitle_row,
+                start_col,
+            )
+
+            group_cell.value = DIFF_GROUP_NAMES.get(
+                current_color,
+                "",
+            )
+
+            group_cell.font = Font(
+                bold=True,
+                color=WHITE if current_color in (BLUE_BRIGHT, RED_BRIGHT, GREY) else BLACK,
+            )
+
+            group_cell.alignment = Alignment(
+                horizontal="left",
+                vertical="center",
+                wrap_text=True,
+            )
+
+            current_color = color
+            start_col = col_idx
+
+    # Último grupo
+    for col in range(start_col, total_cols + 1):
+        ws.cell(subtitle_row, col).fill = PatternFill(
+            "solid",
+            fgColor=current_color,
+        )
+
+    group_cell = ws.cell(
+        subtitle_row,
+        start_col,
     )
-    cell.alignment = Alignment(
+
+    group_cell.value = DIFF_GROUP_NAMES.get(
+        current_color,
+        "COMPARATIVO",
+    )
+
+    group_cell.font = Font(
+        bold=True,
+        color=WHITE if current_color in (BLUE_BRIGHT, RED_BRIGHT, GREY) else BLACK,
+    )
+    group_cell.alignment = Alignment(
         horizontal="left",
         vertical="center",
         wrap_text=True,
@@ -574,6 +630,28 @@ def add_subtotal_differences_detail_table(
                 column=col_idx,
                 value=row[real_col],
             )
+    money_columns = [
+        "SUBTOTAL",
+        "TOTAL",
+        "TOTAL METADATA",
+        "SUBTOTAL_FACTURA",
+        "TOTAL_FACTURA",
+        "diferencia ORIGEN",
+        "SUBTOTAL_EDICOM_MXN",
+        "SUBTOTAL_FACTURA_MXN",
+        "diferencia MXN",
+    ]
+    
+    for col_idx, real_col in enumerate(
+        subtotal_differences_df.columns,
+        start=1,
+    ):
+        if real_col in money_columns:
+            for row in range(header_row + 1, ws.max_row + 1):
+                ws.cell(
+                    row=row,
+                    column=col_idx,
+                ).number_format = "#,##0.00"
 
     current_row = header_row + len(subtotal_differences_df) + 1
 
@@ -643,7 +721,7 @@ def export_to_winba_format(
         current_row=metadata_title_row,
         title="METADATA",
         df=summaries.metadata,
-        color=COLUMN_COLORS["ESTATUS"],
+        color=COLUMN_COLORS["UUID METADATA"],
     )
     add_winba_resumen_block(
         ws=ws_resumen,
@@ -738,7 +816,7 @@ def export_to_winba_format(
         ws_diferencias_subtotal,
         differences.comparative_subtotals,
         title_row=8,
-        title="DIFERENCIAS DE SUBTOTALES",
+        title="COMPARATIVO DE SUBTOTALES",
     )
     autofit_columns(ws_diferencias_subtotal)
 
@@ -759,7 +837,7 @@ def export_to_winba_format(
         ws_diferencias_subtotal,
         differences.relevant_comparative_subtotals,
         title_row=8,
-        title="DIFERENCIAS DE SUBTOTALES",
+        title="COMPARATIVO DE SUBTOTALES",
     )
     add_metadata_detail_table(
         ws_diferencias_subtotal,
@@ -784,6 +862,7 @@ def export_to_winba_format(
     return save_file(wb, date_)
 
 
+# @deprecated
 def export_to_client_format(
     consolidated_df: pd.DataFrame,
     edicom_resumen: pd.DataFrame,
@@ -1083,7 +1162,7 @@ def export_to_client_format(
         ws_diferencias_subtotal,
         subtotal_differences,
         title_row=1,
-        title="DIFERENCIAS DE SUBTOTALES",
+        title="COMPARATIVO DE SUBTOTALES",
     )
     autofit_columns(ws_diferencias_subtotal)
 
@@ -1225,7 +1304,7 @@ def add_winba_resumen_block(ws, current_row, title, df, color):
     title_cell.value = title
     title_cell.fill = PatternFill(fill_type="solid", fgColor=color)
     title_cell.font = Font(
-        bold=True, color=WHITE if color == RED_BRIGHT else BLACK, size=12
+        bold=True, color=WHITE if color in [RED_BRIGHT, BLUE_BRIGHT] else BLACK, size=12
     )
     title_cell.alignment = Alignment(horizontal="center", vertical="center")
 
@@ -1236,7 +1315,7 @@ def add_winba_resumen_block(ws, current_row, title, df, color):
     # Encabezados
     for cell in ws[header_row]:
         cell.fill = PatternFill(fill_type="solid", fgColor=color)
-        cell.font = Font(bold=True, color=WHITE if color == RED_BRIGHT else BLACK)
+        cell.font = Font(bold=True, color=WHITE if color in [RED_BRIGHT, BLUE_BRIGHT] else BLACK)
         cell.alignment = Alignment(horizontal="center", vertical="center")
 
     headers = [cell.value for cell in ws[header_row]]

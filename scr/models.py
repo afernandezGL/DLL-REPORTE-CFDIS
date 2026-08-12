@@ -220,6 +220,7 @@ prefixes = [
     "INT ARR FIN",
     "INT 0%",
     "INT EXE",
+    "SUB"
 ]
 
 MONTHS = [

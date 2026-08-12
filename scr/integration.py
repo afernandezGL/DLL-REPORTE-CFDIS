@@ -3,7 +3,13 @@
 import logging
 import pandas as pd
 import numpy as np
-from scr.models import MONTHS, DifferencesResult, DifferencesUUIDResult, SummaryResult, TransformedResult
+from scr.models import (
+    MONTHS,
+    DifferencesResult,
+    DifferencesUUIDResult,
+    SummaryResult,
+    TransformedResult,
+)
 
 # Module logger
 logger = logging.getLogger(__name__)
@@ -17,6 +23,10 @@ from scr.models import (
 
 
 def build_prefix_conditions(consolidated_df: pd.DataFrame) -> list:
+    receptor_name = (
+        consolidated_df["RECEPTOR NOMBRE"].fillna("").astype(str).str.strip()
+    )
+
     concepto = (
         consolidated_df["CONCEPTO"].fillna("").astype(str).str.lower().str.strip()
     )
@@ -95,7 +105,7 @@ def build_prefix_conditions(consolidated_df: pd.DataFrame) -> list:
         concepto.str.contains(r"prima seguro", na=False),
         # SUB
         concepto.str.contains(
-            r"subsidio|comisión mercantil|comision mercantil|comisiã³n mercantil",
+            r"subsidio|comisión mercantil|comision mercantil",
             regex=True,
             na=False,
         ),
@@ -172,6 +182,14 @@ def build_prefix_conditions(consolidated_df: pd.DataFrame) -> list:
             )
             & iva_exe
         ),
+        receptor_name.str.contains(
+            r"GE SISTEMAS MEDICOS DE MEXICO", regex=True, na=False
+        )
+        & concepto.str.contains(
+            r"comisiã³n mercantil",
+            regex=True,
+            na=False,
+        ),
     ]
     return condiciones
 
@@ -227,6 +245,7 @@ def integrate_data(consolidated_df: pd.DataFrame) -> pd.DataFrame:
 
     return consolidated_df
 
+
 def integrate_status(
     consolidated_df: pd.DataFrame,
 ) -> pd.DataFrame:
@@ -239,9 +258,7 @@ def integrate_status(
             0,
         )
     except Exception:
-        logger.exception(
-            "Error computing ESTATUS REPORTE INTERNO VS METADATA"
-        )
+        logger.exception("Error computing ESTATUS REPORTE INTERNO VS METADATA")
         raise
 
     if "ESTATUS_METADATA" in consolidated_df.columns:
@@ -250,11 +267,10 @@ def integrate_status(
         )
         logger.debug("Renamed ESTATUS_METADATA to ESTATUS")
     else:
-        logger.warning(
-            "ESTATUS_METADATA column not found; ESTATUS rename skipped"
-        )
+        logger.warning("ESTATUS_METADATA column not found; ESTATUS rename skipped")
 
     return consolidated_df
+
 
 def calculate_currency_fields(
     consolidated_df: pd.DataFrame,
@@ -267,38 +283,30 @@ def calculate_currency_fields(
 
     logger.debug(
         "Converted Tipo de cambio to numeric",
-        extra={
-            "unique_tc_values": consolidated_df["TIPO_CAMBIO"]
-            .unique()
-            .tolist()
-        },
+        extra={"unique_tc_values": consolidated_df["TIPO_CAMBIO"].unique().tolist()},
     )
 
     try:
         consolidated_df["TOTAL CONCEPTO MXN"] = np.where(
             consolidated_df.get("ESTATUS METADATA", 0) == 1,
-            consolidated_df["TOTAL CONCEPTO"]
-            * consolidated_df["Tipo de cambio"],
+            consolidated_df["TOTAL CONCEPTO"] * consolidated_df["Tipo de cambio"],
             0,
         )
 
         consolidated_df["TOTAL_EDICOM_MXN"] = (
-            consolidated_df["TOTAL"]
-            * consolidated_df["Tipo de cambio"]
+            consolidated_df["TOTAL"] * consolidated_df["Tipo de cambio"]
         )
 
         consolidated_df["SUBTOTAL_EDICOM_MXN"] = (
-            consolidated_df["SUBTOTAL"]
-            * consolidated_df["Tipo de cambio"]
+            consolidated_df["SUBTOTAL"] * consolidated_df["Tipo de cambio"]
         )
 
     except Exception:
-        logger.exception(
-            "Error computing currency amounts"
-        )
+        logger.exception("Error computing currency amounts")
         raise
 
     return consolidated_df
+
 
 def assign_prefix(
     consolidated_df: pd.DataFrame,
@@ -306,9 +314,7 @@ def assign_prefix(
 
     consolidated_df["IVA"] = consolidated_df["IVA"].fillna("-")
 
-    prefix_conditions = build_prefix_conditions(
-        consolidated_df
-    )
+    prefix_conditions = build_prefix_conditions(consolidated_df)
 
     try:
         consolidated_df["PREFIJO"] = np.select(
@@ -319,20 +325,15 @@ def assign_prefix(
 
         logger.debug(
             "Prefijo assigned",
-            extra={
-                "prefixes_used": list(
-                    set(consolidated_df["PREFIJO"].tolist())
-                )
-            },
+            extra={"prefixes_used": list(set(consolidated_df["PREFIJO"].tolist()))},
         )
 
     except Exception:
-        logger.exception(
-            "Error assigning PREFIJO"
-        )
+        logger.exception("Error assigning PREFIJO")
         raise
 
     return consolidated_df
+
 
 def assign_conciliation(
     consolidated_df: pd.DataFrame,
@@ -341,9 +342,7 @@ def assign_conciliation(
     (
         conciliation_conditions,
         conciliation_values,
-    ) = build_conciliation_conditions(
-        consolidated_df
-    )
+    ) = build_conciliation_conditions(consolidated_df)
 
     consolidated_df["IDENTIFICADO"] = np.select(
         conciliation_conditions,
@@ -353,33 +352,29 @@ def assign_conciliation(
 
     return consolidated_df
 
+
 def finalize_dataframe(
     consolidated_df: pd.DataFrame,
 ) -> pd.DataFrame:
 
     if "UUID" in consolidated_df.columns:
 
-        consolidated_df["priority"] = (
-            consolidated_df["OBSERVACIONES"] == "-"
-        ).astype(int)
-
-        df_sorted = (
-            consolidated_df.sort_values(
-                [
-                    "RFC_EMISOR",
-                    "Mes",
-                    "Día",
-                    "UUID",
-                    "priority",
-                ]
-            )
-            .drop(columns="priority")
+        consolidated_df["priority"] = (consolidated_df["OBSERVACIONES"] == "-").astype(
+            int
         )
+
+        df_sorted = consolidated_df.sort_values(
+            [
+                "RFC_EMISOR",
+                "Mes",
+                "Día",
+                "UUID",
+                "priority",
+            ]
+        ).drop(columns="priority")
 
     else:
-        logger.warning(
-            "UUID column not present; skipping sort"
-        )
+        logger.warning("UUID column not present; skipping sort")
         df_sorted = consolidated_df
 
     edicom_column_names = dict(
@@ -398,18 +393,16 @@ def finalize_dataframe(
 
     edicom_column_names.pop("ESTATUS", None)
 
-    normalized_column_names = (
-        edicom_column_names
-        | metadata_column_names
-    )
+    normalized_column_names = edicom_column_names | metadata_column_names
 
-    df_sorted = df_sorted.rename(
-        columns=normalized_column_names
-    )
+    df_sorted = df_sorted.rename(columns=normalized_column_names)
 
     return df_sorted
 
-def get_subtotal_differences(consolidated_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+
+def get_subtotal_differences(
+    consolidated_df: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Identify rows where the subtotal values differ between Edicom and metadata sources.
 
     Args:
@@ -421,13 +414,26 @@ def get_subtotal_differences(consolidated_df: pd.DataFrame) -> tuple[pd.DataFram
         - relevant_subtotal_differences: DataFrame with rows where the differences exceed the threshold.
     """
     subtotal_differences = consolidated_df.copy()
+    subtotal_differences = subtotal_differences.drop_duplicates(
+        subset=["UUID"],
+        keep="first",
+    )
     subtotal_differences["diferencia MXN"] = (
-        subtotal_differences["SUBTOTAL_EDICOM_MXN"].fillna(0)
-        - subtotal_differences["SUBTOTAL_FACTURA_MXN"].fillna(0)
-    ).abs().round(2)
+        (
+            subtotal_differences["SUBTOTAL_EDICOM_MXN"].fillna(0)
+            - subtotal_differences["SUBTOTAL_FACTURA_MXN"].fillna(0)
+        )
+        .abs()
+        .round(2)
+    )
     subtotal_differences["diferencia ORIGEN"] = (
-        subtotal_differences["TOTAL"].fillna(0) - subtotal_differences["TOTAL_FACTURA"].fillna(0)
-    ).abs().round(2)
+        (
+            subtotal_differences["TOTAL"].fillna(0)
+            - subtotal_differences["TOTAL_FACTURA"].fillna(0)
+        )
+        .abs()
+        .round(2)
+    )
     subtotal_differences = subtotal_differences[
         [
             "UUID",
@@ -439,10 +445,10 @@ def get_subtotal_differences(consolidated_df: pd.DataFrame) -> tuple[pd.DataFram
             "SUBTOTAL_FACTURA",
             "TOTAL_FACTURA",
             "TIPO_ESTATUS",
+            "diferencia ORIGEN",
             "SUBTOTAL_EDICOM_MXN",
             "SUBTOTAL_FACTURA_MXN",
             "diferencia MXN",
-            "diferencia ORIGEN",
         ]
     ]
     relevant_subtotal_differences = subtotal_differences[
@@ -467,17 +473,13 @@ def get_summary(
         "TOTAL_CANCELADAS",
     ]
 
-    edicom_resumen = build_edicom_summary(
-        normalized_df
-    )[column_order]
+    edicom_resumen = build_edicom_summary(normalized_df)[column_order]
 
-    metadata_resumen = build_metadata_summary(
-        transformed_metadata_info_df
-    )[column_order]
+    metadata_resumen = build_metadata_summary(transformed_metadata_info_df)[
+        column_order
+    ]
 
-    factura_resumen = build_factura_summary(
-        transformed_cfdi_info_df
-    )[column_order]
+    factura_resumen = build_factura_summary(transformed_cfdi_info_df)[column_order]
 
     return SummaryResult(
         edicom=edicom_resumen,
@@ -485,165 +487,6 @@ def get_summary(
         factura=factura_resumen,
     )
 
-# def get_summary(
-#     normalized_df: pd.DataFrame,
-#     transformed_metadata_info_df: pd.DataFrame,
-#     transformed_cfdi_info_df: pd.DataFrame,
-# ) -> SummaryResult:
-#     """Build monthly summaries for Edicom, metadata, and CFDI results.
-
-#     Args:
-#         normalized_df: The consolidated DataFrame produced by the integration stage.
-
-#     Returns:
-#         Three DataFrames containing summary statistics for Edicom, metadata, and invoice data.
-#     """
-#     edicom_base = normalized_df.groupby(["Periodo", "UUID"], as_index=False).agg(
-#         RFC_EMISOR=("RFC_EMISOR", "first"),
-#         EDICOM_TOTAL=("TOTAL", "first"),
-#         ESTATUS_EDICOM=("ESTATUS_EDICOM", "first"),
-#     )
-#     metadata_base = transformed_metadata_info_df.groupby(
-#         ["Periodo", "Uuid"], as_index=False
-#     ).agg(
-#         RFC_EMISOR=("RfcEmisor", "first"),
-#         METADATA_TOTAL=("Monto", "first"),
-#         ESTATUS_METADATA=("FechaCancelacion", "first"),
-#     )
-#     cfdi_base = transformed_cfdi_info_df.groupby(
-#         ["FECHA_PERIODO", "UUID"], as_index=False
-#     ).agg(
-#         RFC_EMISOR=("RFC_EMISOR", "first"),
-#         FACTURA_TOTAL=("TOTAL_FACTURA", "first"),
-#         ESTATUS_FACTURA=("TIPO_ESTATUS", "first"),
-#     )
-
-#     edicom_resumen = (
-#         edicom_base.groupby(["Periodo", "RFC_EMISOR"])
-#         .apply(
-#             lambda x: pd.Series(
-#                 {
-#                     "FACTURAS_VIGENTES": x["ESTATUS_EDICOM"].eq("Vigente").sum(),
-#                     "TOTAL_VIGENTES": x.loc[
-#                         x["ESTATUS_EDICOM"].eq("Vigente"), "EDICOM_TOTAL"
-#                     ].sum(),
-#                     "FACTURAS_CANCELADAS": x["ESTATUS_EDICOM"].eq("Cancelado").sum(),
-#                     "TOTAL_CANCELADAS": x.loc[
-#                         x["ESTATUS_EDICOM"].eq("Cancelado"), "EDICOM_TOTAL"
-#                     ].sum(),
-#                 }
-#             )
-#         )
-#         .reset_index()
-#     )
-
-#     edicom_resumen["Periodo"] = pd.Categorical(
-#         edicom_resumen["Periodo"], categories=MONTHS, ordered=True
-#     )
-
-#     edicom_resumen = edicom_resumen.sort_values(["RFC_EMISOR", "Periodo"]).reset_index(
-#         drop=True
-#     )
-
-#     metadata_resumen = (
-#         metadata_base.groupby(["Periodo", "RFC_EMISOR"])
-#         .apply(
-#             lambda x: pd.Series(
-#                 {
-#                     "FACTURAS_VIGENTES": x["ESTATUS_METADATA"].isna().sum(),
-#                     "TOTAL_VIGENTES": x.loc[
-#                         x["ESTATUS_METADATA"].isna(), "METADATA_TOTAL"
-#                     ].sum(),
-#                     "FACTURAS_CANCELADAS": x["ESTATUS_METADATA"].notna().sum(),
-#                     "TOTAL_CANCELADAS": x.loc[
-#                         x["ESTATUS_METADATA"].notna(), "METADATA_TOTAL"
-#                     ].sum(),
-#                 }
-#             )
-#         )
-#         .reset_index()
-#     )
-
-#     metadata_resumen["Periodo"] = pd.Categorical(
-#         metadata_resumen["Periodo"], categories=MONTHS, ordered=True
-#     )
-
-#     metadata_resumen = metadata_resumen.sort_values(
-#         ["RFC_EMISOR", "Periodo"]
-#     ).reset_index(drop=True)
-
-#     factura_resumen = (
-#         cfdi_base.groupby(["FECHA_PERIODO", "RFC_EMISOR"])
-#         .apply(
-#             lambda x: pd.Series(
-#                 {
-#                     "FACTURAS_VIGENTES": x["ESTATUS_FACTURA"].eq("Vigente").sum(),
-#                     "TOTAL_VIGENTES": x.loc[
-#                         x["ESTATUS_FACTURA"].eq("Vigente"), "FACTURA_TOTAL"
-#                     ].sum(),
-#                     "FACTURAS_CANCELADAS": (
-#                         x["ESTATUS_FACTURA"].eq("Cancelados")
-#                     ).sum(),
-#                     "TOTAL_CANCELADAS": x.loc[
-#                         x["ESTATUS_FACTURA"].eq("Cancelados"), "FACTURA_TOTAL"
-#                     ].sum(),
-#                 }
-#             )
-#         )
-#         .reset_index()
-#     )
-
-#     factura_resumen["FECHA_PERIODO"] = pd.Categorical(
-#         factura_resumen["FECHA_PERIODO"], categories=MONTHS, ordered=True
-#     )
-
-#     factura_resumen = factura_resumen.sort_values(
-#         ["RFC_EMISOR", "FECHA_PERIODO"]
-#     ).reset_index(drop=True)
-
-#     factura_resumen = factura_resumen.rename(columns={"FECHA_PERIODO": "Periodo"})
-#     import pdb; pdb.set_trace()
-
-#     column_order = [
-#         "RFC_EMISOR",
-#         "PERIODO",
-#         "FACTURAS_VIGENTES",
-#         "TOTAL_VIGENTES",
-#         "FACTURAS_CANCELADAS",
-#         "TOTAL_CANCELADAS",
-#     ]
-
-#     for resumen in [edicom_resumen, metadata_resumen, factura_resumen]:
-#         resumen["TOTAL_VIGENTES"] = resumen["TOTAL_VIGENTES"].round(0).astype(int)
-
-#         resumen["TOTAL_CANCELADAS"] = resumen["TOTAL_CANCELADAS"].round(0).astype(int)
-
-#         resumen["FACTURAS_CANCELADAS"] = (
-#             resumen["FACTURAS_CANCELADAS"].round(0).astype(int)
-#         )
-
-#         resumen["FACTURAS_VIGENTES"] = resumen["FACTURAS_VIGENTES"].round(0).astype(int)
-
-#         resumen.loc[len(resumen)] = {
-#             "Periodo": "TOTAL",
-#             "FACTURAS_VIGENTES": resumen["FACTURAS_VIGENTES"].sum(),
-#             "TOTAL_VIGENTES": resumen["TOTAL_VIGENTES"].sum(),
-#             "FACTURAS_CANCELADAS": resumen["FACTURAS_CANCELADAS"].sum(),
-#             "TOTAL_CANCELADAS": resumen["TOTAL_CANCELADAS"].sum(),
-#         }
-#         resumen.rename(columns={"Periodo": "PERIODO"}, inplace=True)
-
-#     edicom_resumen = edicom_resumen[column_order]
-#     edicom_resumen[:] = edicom_resumen[column_order]
-#     metadata_resumen = metadata_resumen[column_order]
-#     metadata_resumen[:] = metadata_resumen[column_order]
-#     factura_resumen = factura_resumen[column_order]
-#     factura_resumen[:] = factura_resumen[column_order]
-#     return SummaryResult(
-#         edicom=edicom_resumen,
-#         metadata=metadata_resumen,
-#         factura=factura_resumen,
-#     )
 
 def build_edicom_summary(
     normalized_df: pd.DataFrame,
@@ -659,26 +502,16 @@ def build_edicom_summary(
     )
 
     resumen = (
-        edicom_base.groupby(
-            ["Periodo", "RFC_EMISOR"]
-        )
+        edicom_base.groupby(["Periodo", "RFC_EMISOR"])
         .apply(
             lambda x: pd.Series(
                 {
-                    "FACTURAS_VIGENTES": (
-                        x["ESTATUS_EDICOM"]
-                        .eq("Vigente")
-                        .sum()
-                    ),
+                    "FACTURAS_VIGENTES": (x["ESTATUS_EDICOM"].eq("Vigente").sum()),
                     "TOTAL_VIGENTES": x.loc[
                         x["ESTATUS_EDICOM"].eq("Vigente"),
                         "EDICOM_TOTAL",
                     ].sum(),
-                    "FACTURAS_CANCELADAS": (
-                        x["ESTATUS_EDICOM"]
-                        .eq("Cancelado")
-                        .sum()
-                    ),
+                    "FACTURAS_CANCELADAS": (x["ESTATUS_EDICOM"].eq("Cancelado").sum()),
                     "TOTAL_CANCELADAS": x.loc[
                         x["ESTATUS_EDICOM"].eq("Cancelado"),
                         "EDICOM_TOTAL",
@@ -695,11 +528,10 @@ def build_edicom_summary(
         ordered=True,
     )
 
-    resumen = resumen.sort_values(
-        ["RFC_EMISOR", "Periodo"]
-    ).reset_index(drop=True)
+    resumen = resumen.sort_values(["RFC_EMISOR", "Periodo"]).reset_index(drop=True)
 
     return finalize_summary(resumen)
+
 
 def build_metadata_summary(
     transformed_metadata_info_df: pd.DataFrame,
@@ -715,26 +547,16 @@ def build_metadata_summary(
     )
 
     resumen = (
-        metadata_base.groupby(
-            ["Periodo", "RFC_EMISOR"]
-        )
+        metadata_base.groupby(["Periodo", "RFC_EMISOR"])
         .apply(
             lambda x: pd.Series(
                 {
-                    "FACTURAS_VIGENTES": (
-                        x["ESTATUS_METADATA"]
-                        .isna()
-                        .sum()
-                    ),
+                    "FACTURAS_VIGENTES": (x["ESTATUS_METADATA"].isna().sum()),
                     "TOTAL_VIGENTES": x.loc[
                         x["ESTATUS_METADATA"].isna(),
                         "METADATA_TOTAL",
                     ].sum(),
-                    "FACTURAS_CANCELADAS": (
-                        x["ESTATUS_METADATA"]
-                        .notna()
-                        .sum()
-                    ),
+                    "FACTURAS_CANCELADAS": (x["ESTATUS_METADATA"].notna().sum()),
                     "TOTAL_CANCELADAS": x.loc[
                         x["ESTATUS_METADATA"].notna(),
                         "METADATA_TOTAL",
@@ -751,11 +573,10 @@ def build_metadata_summary(
         ordered=True,
     )
 
-    resumen = resumen.sort_values(
-        ["RFC_EMISOR", "Periodo"]
-    ).reset_index(drop=True)
+    resumen = resumen.sort_values(["RFC_EMISOR", "Periodo"]).reset_index(drop=True)
 
     return finalize_summary(resumen)
+
 
 def build_factura_summary(
     transformed_cfdi_info_df: pd.DataFrame,
@@ -771,25 +592,17 @@ def build_factura_summary(
     )
 
     resumen = (
-        cfdi_base.groupby(
-            ["FECHA_PERIODO", "RFC_EMISOR"]
-        )
+        cfdi_base.groupby(["FECHA_PERIODO", "RFC_EMISOR"])
         .apply(
             lambda x: pd.Series(
                 {
-                    "FACTURAS_VIGENTES": (
-                        x["ESTATUS_FACTURA"]
-                        .eq("Vigente")
-                        .sum()
-                    ),
+                    "FACTURAS_VIGENTES": (x["ESTATUS_FACTURA"].eq("Vigente").sum()),
                     "TOTAL_VIGENTES": x.loc[
                         x["ESTATUS_FACTURA"].eq("Vigente"),
                         "FACTURA_TOTAL",
                     ].sum(),
                     "FACTURAS_CANCELADAS": (
-                        x["ESTATUS_FACTURA"]
-                        .eq("Cancelados")
-                        .sum()
+                        x["ESTATUS_FACTURA"].eq("Cancelados").sum()
                     ),
                     "TOTAL_CANCELADAS": x.loc[
                         x["ESTATUS_FACTURA"].eq("Cancelados"),
@@ -807,41 +620,26 @@ def build_factura_summary(
         ordered=True,
     )
 
-    resumen = resumen.sort_values(
-        ["RFC_EMISOR", "FECHA_PERIODO"]
-    ).reset_index(drop=True)
+    resumen = resumen.sort_values(["RFC_EMISOR", "FECHA_PERIODO"]).reset_index(
+        drop=True
+    )
 
     resumen = resumen.rename(columns={"FECHA_PERIODO": "Periodo"})
 
     return finalize_summary(resumen)
 
+
 def finalize_summary(
     resumen: pd.DataFrame,
 ) -> pd.DataFrame:
 
-    resumen["TOTAL_VIGENTES"] = (
-        resumen["TOTAL_VIGENTES"]
-        .round(0)
-        .astype(int)
-    )
+    resumen["TOTAL_VIGENTES"] = resumen["TOTAL_VIGENTES"].round(0).astype(int)
 
-    resumen["TOTAL_CANCELADAS"] = (
-        resumen["TOTAL_CANCELADAS"]
-        .round(0)
-        .astype(int)
-    )
+    resumen["TOTAL_CANCELADAS"] = resumen["TOTAL_CANCELADAS"].round(0).astype(int)
 
-    resumen["FACTURAS_CANCELADAS"] = (
-        resumen["FACTURAS_CANCELADAS"]
-        .round(0)
-        .astype(int)
-    )
+    resumen["FACTURAS_CANCELADAS"] = resumen["FACTURAS_CANCELADAS"].round(0).astype(int)
 
-    resumen["FACTURAS_VIGENTES"] = (
-        resumen["FACTURAS_VIGENTES"]
-        .round(0)
-        .astype(int)
-    )
+    resumen["FACTURAS_VIGENTES"] = resumen["FACTURAS_VIGENTES"].round(0).astype(int)
 
     resumen.loc[len(resumen)] = {
         "Periodo": "TOTAL",
@@ -851,11 +649,10 @@ def finalize_summary(
         "TOTAL_CANCELADAS": resumen["TOTAL_CANCELADAS"].sum(),
     }
 
-    resumen = resumen.rename(
-        columns={"Periodo": "PERIODO"}
-    )
+    resumen = resumen.rename(columns={"Periodo": "PERIODO"})
 
     return resumen
+
 
 def get_missing_systems(row):
     missing = []
@@ -888,8 +685,7 @@ def get_present_systems(row):
 
 
 def get_differences(
-    consolidated_df: pd.DataFrame,
-    transformed_results: TransformedResult
+    consolidated_df: pd.DataFrame, transformed_results: TransformedResult
 ) -> DifferencesResult:
     """Identify differences between the consolidated DataFrame and the source datasets.
 
@@ -911,15 +707,23 @@ def get_differences(
         metadata=uuid_differences.loc[uuid_differences["METADATA"], "UUID"].tolist(),
         facturas=uuid_differences.loc[uuid_differences["FACTURAS"], "UUID"].tolist(),
     )
-    metadata_missings = build_metadata_missings(consolidated_df, uuid_differences_result.metadata, transformed_results.filtered_metadata, transformed_results.factura)
+    metadata_missings = build_metadata_missings(
+        consolidated_df,
+        uuid_differences_result.metadata,
+        transformed_results.filtered_metadata,
+        transformed_results.factura,
+    )
 
-    subtotal_differences, relevant_subtotal_differences = get_subtotal_differences(metadata_missings)
+    subtotal_differences, relevant_subtotal_differences = get_subtotal_differences(
+        metadata_missings
+    )
     return DifferencesResult(
         uuid=uuid_differences,
         subtotal=subtotal_differences,
         relevant_uuid=uuid_differences_result,
         relevant_subtotal=relevant_subtotal_differences,
     )
+
 
 def build_uuid_differences(
     consolidated_df: pd.DataFrame,
@@ -951,11 +755,12 @@ def build_uuid_differences(
         [
             "UUID",
             "EDICOM",
-            "FACTURAS",
             "METADATA",
+            "FACTURAS",
         ]
     ].sort_values(["UUID"])
     return differences
+
 
 def build_metadata_missings(
     consolidated_df: pd.DataFrame,
@@ -988,6 +793,7 @@ def build_metadata_missings(
         ignore_index=True,
     )
     return final_consolidated_df
+
 
 def join_dfs(
     transformed_df_results: TransformedResult,
