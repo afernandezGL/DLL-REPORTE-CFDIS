@@ -1,15 +1,16 @@
 """Database connection helpers for the SQLAlchemy engine used by the pipeline."""
 
 import logging
+
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 
 from config.config import (
+    DB_DATABASE,
+    DB_PASSWORD,
     DB_PORT,
     DB_SERVER,
-    DB_DATABASE,
     DB_USER,
-    DB_PASSWORD,
 )
 
 logger = logging.getLogger(__name__)
@@ -25,7 +26,15 @@ def get_engine() -> Engine:
         ValueError: If any required database configuration value is missing.
     """
 
-    logger.info("Creating DB engine", extra={"server": DB_SERVER, "database": DB_DATABASE, "user": DB_USER, "port": DB_PORT})
+    logger.info(
+        "Creating DB engine",
+        extra={
+            "server": DB_SERVER,
+            "database": DB_DATABASE,
+            "user": DB_USER,
+            "port": DB_PORT,
+        },
+    )
     if not all([DB_SERVER, DB_DATABASE, DB_USER, DB_PASSWORD, DB_PORT]):
         logger.error("Missing DB configuration parameters")
         raise ValueError(
@@ -34,10 +43,7 @@ def get_engine() -> Engine:
 
     # Avoid logging sensitive values like DB_PASSWORD
     connection_string = (
-        f"mssql+pymssql://"
-        f"{DB_USER}:{DB_PASSWORD}"
-        f"@{DB_SERVER}:{DB_PORT}/"
-        f"{DB_DATABASE}"
+        f"mssql+pymssql://{DB_USER}:{DB_PASSWORD}@{DB_SERVER}:{DB_PORT}/{DB_DATABASE}"
     )
 
     try:
@@ -47,6 +53,7 @@ def get_engine() -> Engine:
     except Exception as e:
         logger.exception("Failed to create DB engine", exc_info=e)
         raise
+
 
 def close_engine(engine: Engine) -> None:
     """Dispose of a SQLAlchemy engine and release its connection resources.

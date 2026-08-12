@@ -1,6 +1,8 @@
 """Script para comparar dos archivos Excel y generar un archivo de salida con las diferencias en los prefijos."""
-import pandas as pd
+
 import os
+
+import pandas as pd
 
 directorio = os.getcwd()
 print(f"Directorio actual: {directorio}")
@@ -23,17 +25,16 @@ objetivo_df["_seq"] = objetivo_df.groupby([UUID_COL, MONTO_COL]).cumcount()
 
 
 # Unir 1ro con 1ro, 2do con 2do, etc.
-resultado = salida_df[[UUID_COL, MONTO_COL, PREFIJO_COL, "CONCEPTO","_seq"]].merge(
+resultado = salida_df[[UUID_COL, MONTO_COL, PREFIJO_COL, "CONCEPTO", "_seq"]].merge(
     objetivo_df[[UUID_COL, MONTO_COL, PREFIJO_COL, "CONCEPTO", "_seq"]],
     on=[UUID_COL, MONTO_COL, "_seq"],
     how="left",
-    suffixes=("_izq", "_der")
+    suffixes=("_izq", "_der"),
 )
 
 # Comparar prefijos
 resultado["prefijo_igual"] = (
-    resultado[f"{PREFIJO_COL}_izq"] ==
-    resultado[f"{PREFIJO_COL}_der"]
+    resultado[f"{PREFIJO_COL}_izq"] == resultado[f"{PREFIJO_COL}_der"]
 )
 
 "FILTER: Solo filas donde los prefijos no coinciden y que prefijo derecho no sea nulo"

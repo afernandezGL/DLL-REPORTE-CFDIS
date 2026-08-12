@@ -1,9 +1,10 @@
 """Entry point for the CFDI reporting pipeline."""
 
-import logging
-from datetime import datetime
 import argparse
+import logging
 from argparse import Namespace
+from datetime import datetime
+
 from scr.orchestrator import build_report
 
 logger = logging.getLogger(__name__)
@@ -20,7 +21,7 @@ def parse_args() -> Namespace:
     )
     parser.add_argument(
         "--date",
-        type=str,
+        type=validate_date_format,
         required=True,
         help="Fecha en formato YYYY_MM para procesar los datos.",
     )
@@ -34,7 +35,7 @@ def parse_args() -> Namespace:
     return parser.parse_args()
 
 
-def validate_args(date_str: str) -> str:
+def validate_date_format(date_str: str) -> str:
     """Validate that the supplied period follows the expected YYYY_MM format.
 
     Args:
@@ -54,18 +55,19 @@ def validate_args(date_str: str) -> str:
     return date_str
 
 
-def main():
+def main() -> None:
     """Execute the full reporting pipeline from data loading to Excel export."""
+    # logging.basicConfig(
+    #     level=logging.INFO,
+    #     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    #     )
     args = parse_args()
-    date_ = validate_args(args.date)
-    logger.info("Pipeline started", extra={"date": date_})
-    success = build_report(date_, args.format)
+    logger.info("Pipeline started", extra={"date": args.date})
+    success = build_report(args.date, args.format)
     if success:
-        logger.info("Export completed", extra={"date": date_})
-        print("Se creo correctamente el archivo")
+        logger.info("Export completed", extra={"date": args.date})
     else:
-        logger.error("Export failed", extra={"date": date_})
-        print("Error al crear el archivo")
+        logger.error("Export failed", extra={"date": args.date})
 
 
 if __name__ == "__main__":
