@@ -2,22 +2,21 @@
 
 import logging
 from copy import copy
-from warnings import deprecated
+
 import pandas as pd
-from pathlib import Path
-import numpy as np
 from openpyxl import Workbook
-from openpyxl.worksheet.worksheet import Worksheet
-from openpyxl.styles import PatternFill, Font, Border, Side, Alignment
-from openpyxl.utils.dataframe import dataframe_to_rows
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
-from config.config import OUTPUT_FOLDER, EDICOM_LOG_FOLDER_NAME
+from openpyxl.utils.dataframe import dataframe_to_rows
+from openpyxl.worksheet.worksheet import Worksheet
+
+from config.config import EDICOM_LOG_FOLDER_NAME, OUTPUT_FOLDER
 from scr.models import (
     MONTH_MAP,
     DifferencesReportResult,
     SummaryResult,
-    edicom_log_column_names,
     columns_to_export,
+    edicom_log_column_names,
 )
 from scr.stryles import (
     BEIGE,
@@ -25,14 +24,13 @@ from scr.stryles import (
     BLUE_BRIGHT,
     COLUMN_COLORS,
     COLUMN_GROUPS,
-    COLUMN_GROUPS,
     DIFF_COLOR_NAMES,
+    DIFF_GROUP_NAMES,
     GREY,
     GROUP_COLORS,
     RED_BRIGHT,
     WHITE,
     YELLOW,
-    DIFF_GROUP_NAMES,
     diff_display_names,
 )
 
@@ -177,7 +175,7 @@ def add_metadata_detail_table(
         )
 
     ws.auto_filter.ref = (
-        f"A{header_row}:" f"{ws.cell(ws.max_row, ws.max_column).coordinate}"
+        f"A{header_row}:{ws.cell(ws.max_row, ws.max_column).coordinate}"
     )
 
 
@@ -263,7 +261,7 @@ def add_edicom_detail_table(
         )
 
     ws.auto_filter.ref = (
-        f"A{header_row}:" f"{ws.cell(ws.max_row, ws.max_column).coordinate}"
+        f"A{header_row}:{ws.cell(ws.max_row, ws.max_column).coordinate}"
     )
 
 
@@ -350,7 +348,7 @@ def add_cfdi_detail_table(
         )
 
     ws.auto_filter.ref = (
-        f"A{header_row}:" f"{ws.cell(ws.max_row, ws.max_column).coordinate}"
+        f"A{header_row}:{ws.cell(ws.max_row, ws.max_column).coordinate}"
     )
 
 
@@ -498,7 +496,7 @@ def add_consolidated_detail_table(
         )
 
     ws.auto_filter.ref = (
-        f"A{header_row}:" f"{ws.cell(ws.max_row, ws.max_column).coordinate}"
+        f"A{header_row}:{ws.cell(ws.max_row, ws.max_column).coordinate}"
     )
 
     headers = [cell.value for cell in ws[header_row]]
@@ -574,7 +572,6 @@ def add_subtotal_differences_detail_table(
             start_col = col_idx
 
         elif color != current_color:
-
             for col in range(start_col, col_idx):
                 ws.cell(subtitle_row, col).fill = PatternFill(
                     "solid",
@@ -593,7 +590,9 @@ def add_subtotal_differences_detail_table(
 
             group_cell.font = Font(
                 bold=True,
-                color=WHITE if current_color in (BLUE_BRIGHT, RED_BRIGHT, GREY) else BLACK,
+                color=WHITE
+                if current_color in (BLUE_BRIGHT, RED_BRIGHT, GREY)
+                else BLACK,
             )
 
             group_cell.alignment = Alignment(
@@ -687,7 +686,7 @@ def add_subtotal_differences_detail_table(
         "SUBTOTAL_FACTURA_MXN",
         "diferencia MXN",
     ]
-    
+
     for col_idx, real_col in enumerate(
         subtotal_differences_df.columns,
         start=1,
@@ -1378,7 +1377,9 @@ def add_winba_resumen_block(ws, current_row, title, df, color):
     # Encabezados
     for cell in ws[header_row]:
         cell.fill = PatternFill(fill_type="solid", fgColor=color)
-        cell.font = Font(bold=True, color=WHITE if color in [RED_BRIGHT, BLUE_BRIGHT] else BLACK)
+        cell.font = Font(
+            bold=True, color=WHITE if color in [RED_BRIGHT, BLUE_BRIGHT] else BLACK
+        )
         cell.alignment = Alignment(horizontal="center", vertical="center")
 
     headers = [cell.value for cell in ws[header_row]]
