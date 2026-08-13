@@ -30,7 +30,7 @@ def parse_args() -> Namespace:
         "--format",
         choices=["cliente", "winba"],
         required=False,
-        default="cliente",
+        default="winba",
     )
     return parser.parse_args()
 
