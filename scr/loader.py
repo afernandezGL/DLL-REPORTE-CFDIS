@@ -294,6 +294,12 @@ def get_full_cfdi_info(
     engine = None
     year = int(date_.split("_")[0])
     try:
+        if len(uuid_list) == 0:
+            logger.warning(
+                "UUID list is empty; returning empty DataFrame",
+                extra={"date": date_},
+            )
+            return pd.DataFrame(columns=["UUID", "RFC_EMISOR", "FECHA"])
         filter_cfdi_query = full_cfdi_query.format(
             year=year,
             rfc_emisor_list=", ".join(f"'{rfc}'" for rfc in rfc_emisor_list),

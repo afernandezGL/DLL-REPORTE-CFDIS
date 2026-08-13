@@ -9,6 +9,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.worksheet.worksheet import Worksheet
+from deprecated import deprecated
 
 from config.config import EDICOM_LOG_FOLDER_NAME, OUTPUT_FOLDER
 from scr.models import (
@@ -872,7 +873,7 @@ def export_to_winba_format(
         "DLL LEASING / DE LAGE LANDEN",
         (
             "Detalle Diferencias por subtotales"
-            if differences.comparative_subtotals.shape[0] > 0
+            if differences.relevant_comparative_subtotals.shape[0] > 0
             else "No hay diferencias de subtotales"
         ),
         year,
@@ -907,7 +908,10 @@ def export_to_winba_format(
     return save_file(wb, date_)
 
 
-# @deprecated
+@deprecated(
+    version="1",
+    reason="Use export_to_winba_format instead."
+)
 def export_to_client_format(
     consolidated_df: pd.DataFrame,
     edicom_resumen: pd.DataFrame,
@@ -918,20 +922,12 @@ def export_to_client_format(
     subtotal_differences: pd.DataFrame,
     date_: str,
 ) -> bool:
-    """Export the consolidated dataset and monthly summaries to an Excel workbook.
-
-    The function creates a workbook with a detailed output sheet and a summary
-    sheet containing the Edicom, metadata, and CFDI recap sections.
-
-    Args:
-        consolidated_df: The fully processed and reconciled dataset.
-        edicom_resumen: Summary statistics for Edicom results.
-        metadata_resumen: Summary statistics for metadata results.
-        factura_resumen: Summary statistics for CFDI invoice results.
-        date_: Period identifier used in the output file name.
-
-    Returns:
-        True when the export completes successfully.
+    """
+        Deprecated:
+        Desde la versión 1.
+         
+        Alternative:
+        Use export_to_winba_format().
     """
 
     year = date_.split("_")[0]

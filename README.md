@@ -121,7 +121,7 @@ Desde la raíz del proyecto, ejecuta:
 python -m scr.report_pipeline --date 2026_01 --format cliente
 ```
 
-El argumento `--format` acepta los valores `cliente` y `winba`; si se omite, el valor predeterminado es `cliente`.
+El argumento `--format` acepta los valores `cliente` y `winba`; si se omite, el valor predeterminado es `winba`.
 
 ### Nota importante sobre la fecha
 
